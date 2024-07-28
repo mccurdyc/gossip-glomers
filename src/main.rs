@@ -1,10 +1,9 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{command, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use serde_json::{Deserializer, Serializer};
 use std::default::Default;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use tracing::{error, info};
+use std::io::{self, Read, Write};
+use tracing::info;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -19,6 +18,7 @@ enum Commands {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
 enum Message {
     Init {
         #[serde(alias = "type")]
@@ -51,7 +51,7 @@ impl Node {
     }
 }
 
-fn listen<T, W>(lr: &mut T, lw: &mut W) -> Result<()>
+fn listen<T, W>(lr: T, lw: &mut W) -> Result<()>
 where
     T: Read,
     W: Write,
@@ -59,83 +59,66 @@ where
     info!("Starting listen loop");
     let node: &mut Node = &mut Default::default();
 
-    let buf_reader = BufReader::new(lr);
-    let stream = Deserializer::from_reader(buf_reader).into_iter::<Message>();
+    // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
+    // from_reader will read to end of deserialized object
+    let msg: Message = serde_json::from_reader(lr)?;
+    eprintln!("msg: {:?}", msg);
 
-    // Loop messages
-    // https://doc.rust-lang.org/stable/rust-by-example/std_misc/file/read_lines.html#a-more-efficient-approach
-    for l in stream {
-        match l {
-            Ok(msg) => {
-                println!("Decoded message: {:?}", msg);
-                match msg {
-                    Message::Init {
-                        typ: _,
-                        msg_id,
-                        node_id,
-                        node_ids,
-                    } => {
-                        info!(
-                            "received init message -> node_id: {:?}, node_ids: {:?}",
-                            node_id, node_ids
-                        );
-                        // If the message is an Init message, we need to actually configure
-                        // the node object above.
-                        node.new(node_id, node_ids);
-                        let resp = InitResp {
-                            typ: "init_ok".to_string(),
-                            in_reply_to: msg_id,
-                        };
-                        serde_json::to_writer(&mut *lw, &resp)?;
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Error reading message: {}", e);
-            }
+    match msg {
+        Message::Init {
+            typ: _,
+            msg_id,
+            node_id,
+            node_ids,
+        } => {
+            info!(
+                "received init message -> node_id: {:?}, node_ids: {:?}",
+                node_id, node_ids
+            );
+            // If the message is an Init message, we need to actually configure
+            // the node object above.
+            node.new(node_id, node_ids);
+            let resp = InitResp {
+                typ: "init_ok".to_string(),
+                in_reply_to: msg_id,
+            };
+            serde_json::to_writer(&mut *lw, &resp)?;
         }
-    }
-
+    };
     Ok(())
 }
 
 #[test]
 fn listen_test() {
-    use std::io::{BufReader, Cursor, Read};
+    use std::io::Cursor;
     use std::vec::Vec;
 
-    let input = b"
-        {
-        \"type\": \"init\",
-        \"msg_id\": 1,
-        \"node_id\": 'n3',
-        \"node_ids\": [\"n1\", \"n2\", \"n3\"]
-        }"
-    .to_vec();
+    let input = r#"{
+    "type": "init",
+    "msg_id": 1,
+    "node_id": "n3",
+    "node_ids": ["n1", "n2", "n3"]
+}"#;
 
-    let expected = b"{
-  \"type\": \"init_ok\",
-  \"in_reply_to\": 1
-}";
+    let expected = r#"{
+  "type": "init_ok",
+  "in_reply_to": 1
+}"#;
 
     // Necessary to implement Read trait on BufReader for bytes
-    let vec: Vec<u8> = Vec::new();
-    let mut write_cursor = Cursor::new(vec);
+    let mut vec: Vec<u8> = Vec::new();
+    let mut write_cursor = Cursor::new(&mut vec);
+    let read_cursor = Cursor::new(input.as_bytes());
 
-    let read_cursor = Cursor::new(input);
-    let mut line_reader = BufReader::new(read_cursor);
+    // println!("reader: {:?}", read_cursor.read_to_end(&mut vec).unwrap());
+    listen(read_cursor, &mut write_cursor).expect("listen failed");
 
-    listen(&mut line_reader, &mut write_cursor).expect("listen failed");
-
-    let mut actual: Vec<u8> = Vec::new();
-    write_cursor.read(actual.as_mut_slice()).unwrap();
-
-    assert_eq!(actual, expected);
+    assert_eq!(String::from_utf8(vec).unwrap(), expected);
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut stdin = io::stdin().lock();
+    let stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
 
     // Initialize the default subscriber, which logs to stdout
@@ -146,7 +129,7 @@ fn main() -> Result<()> {
 
     info!("Starting lodiseval");
     match &cli.command {
-        Some(Commands::Eval {}) => listen(&mut stdin, &mut stdout)?,
+        Some(Commands::Eval {}) => listen(stdin, &mut stdout)?,
         None => (),
     }
 
