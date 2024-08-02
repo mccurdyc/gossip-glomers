@@ -18,11 +18,9 @@ enum Commands {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "lowercase")]
 enum Message {
     Init {
-        #[serde(alias = "type")]
-        typ: String,
         msg_id: u8,
         node_id: String,
         node_ids: Vec<String>,
@@ -66,7 +64,6 @@ where
 
     match msg {
         Message::Init {
-            typ: _,
             msg_id,
             node_id,
             node_ids,
