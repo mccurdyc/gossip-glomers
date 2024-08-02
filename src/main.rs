@@ -29,7 +29,7 @@ enum Message {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct InitResp {
-    #[serde(alias = "type")]
+    #[serde(rename = "type")]
     typ: String,
     in_reply_to: u8,
 }
@@ -97,10 +97,7 @@ fn listen_test() {
     "node_ids": ["n1", "n2", "n3"]
 }"#;
 
-    let expected = r#"{
-  "type": "init_ok",
-  "in_reply_to": 1
-}"#;
+    let expected = r#"{"type":"init_ok","in_reply_to":1}"#;
 
     // Necessary to implement Read trait on BufReader for bytes
     let mut vec: Vec<u8> = Vec::new();
