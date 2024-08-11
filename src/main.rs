@@ -17,13 +17,21 @@ enum Commands {
     Eval {},
 }
 
+// I use "untagged" in the following because the type tag differs based on the message.
+// I could split the Init message into a separate enum so that I could infer
+// the type based on different internal fields in the message body.
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(untagged, rename_all = "lowercase")]
 enum Message {
     Init {
         msg_id: u8,
         node_id: String,
         node_ids: Vec<String>,
+    },
+    Echo {
+        src: String,
+        dest: String,
+        body: EchoReq,
     },
 }
 
@@ -32,6 +40,31 @@ struct InitResp {
     #[serde(rename = "type")]
     typ: String,
     in_reply_to: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct EchoReq {
+    #[serde(rename = "type")]
+    typ: String,
+    msg_id: u8,
+    echo: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct EchoResp {
+    src: String,
+    dest: String,
+    // You can't nest structures in Rust for ownership reasons.
+    body: EchoRespBody,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct EchoRespBody {
+    #[serde(rename = "type")]
+    typ: String,
+    msg_id: u8,
+    in_reply_to: u8,
+    echo: String,
 }
 
 #[derive(Default)]
@@ -81,12 +114,26 @@ where
             };
             serde_json::to_writer(&mut *lw, &resp)?;
         }
+        Message::Echo { src, dest, body } => {
+            info!("received echo message");
+            let resp = EchoResp {
+                src: dest,
+                dest: src,
+                body: EchoRespBody {
+                    typ: "echo_ok".to_string(),
+                    msg_id: body.msg_id,
+                    in_reply_to: body.msg_id,
+                    echo: body.echo,
+                },
+            };
+            serde_json::to_writer(&mut *lw, &resp)?;
+        }
     };
     Ok(())
 }
 
 #[test]
-fn listen_test() {
+fn listen_init_message() {
     use std::io::Cursor;
     use std::vec::Vec;
 
@@ -105,6 +152,33 @@ fn listen_test() {
     let read_cursor = Cursor::new(input.as_bytes());
 
     // println!("reader: {:?}", read_cursor.read_to_end(&mut vec).unwrap());
+    listen(read_cursor, &mut write_cursor).expect("listen failed");
+
+    assert_eq!(String::from_utf8(vec).unwrap(), expected);
+}
+
+#[test]
+fn listen_echo_message() {
+    use std::io::Cursor;
+    use std::vec::Vec;
+
+    let input = r#"{
+    "src": "c1",
+    "dest": "n1",
+    "body": {
+        "type": "echo",
+        "msg_id": 1,
+        "echo": "Please echo 35"
+    }
+}"#;
+
+    let expected = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","msg_id":1,"in_reply_to":1,"echo":"Please echo 35"}}"#;
+
+    // Necessary to implement Read trait on BufReader for bytes
+    let mut vec: Vec<u8> = Vec::new();
+    let mut write_cursor = Cursor::new(&mut vec);
+    let read_cursor = Cursor::new(input.as_bytes());
+
     listen(read_cursor, &mut write_cursor).expect("listen failed");
 
     assert_eq!(String::from_utf8(vec).unwrap(), expected);
