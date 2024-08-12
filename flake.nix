@@ -110,6 +110,9 @@
               pkgs.rust-analyzer
               pkgs.rustPackages.clippy
               rustVersion
+
+              # Maelstrom
+              pkgs.jdk22_headless
             ];
           };
         };
