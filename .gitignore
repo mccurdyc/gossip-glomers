@@ -6,3 +6,6 @@
 target/
 result/
 result
+store/
+maelstrom
+lib/
