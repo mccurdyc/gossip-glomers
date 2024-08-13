@@ -166,8 +166,10 @@ fn listen_echo_message() {
 }
 
 fn main() {
-    let stdin = io::stdin().lock();
+    let stdin = io::stdin();
     let mut stdout = io::stdout().lock();
 
-    let _ = listen(stdin, &mut stdout);
+    loop {
+        let _ = listen(&stdin, &mut stdout);
+    }
 }
