@@ -83,6 +83,7 @@ where
     let msg: Message = serde_json::from_reader(lr)?;
     info!(">> input: {:?}", msg);
     match msg {
+        // Node didn't respond to init message
         Message::Init {
             msg_id,
             node_id,
@@ -95,8 +96,9 @@ where
                 typ: "init_ok".to_string(),
                 in_reply_to: msg_id,
             };
-            serde_json::to_writer(&mut *lw, &resp)?;
-            lw.write_all(b"\n")?;
+            let resp_str = serde_json::to_string(&resp)?;
+            info!("<< output: {:?}", &resp_str);
+            lw.write_all(resp_str.as_bytes())?;
         }
         Message::Echo { src, dest, body } => {
             let resp = EchoResp {
@@ -109,9 +111,9 @@ where
                     echo: body.echo,
                 },
             };
-            info!("<< output: {:?}", &resp);
-            serde_json::to_writer(&mut *lw, &resp)?;
-            lw.write_all(b"\n")?;
+            let resp_str = serde_json::to_string(&resp)?;
+            info!("<< output: {:?}", &resp_str);
+            lw.write_all(resp_str.as_bytes())?;
         }
     };
     Ok(())
@@ -129,8 +131,7 @@ fn listen_init_message() {
     "node_ids": ["n1", "n2", "n3"]
 }"#;
 
-    let expected = r#"{"type":"init_ok","in_reply_to":1}
-"#;
+    let expected = r#"{"type":"init_ok","in_reply_to":1}"#;
 
     // Necessary to implement Read trait on BufReader for bytes
     let mut vec: Vec<u8> = Vec::new();
@@ -157,8 +158,7 @@ fn listen_echo_message() {
     }
 }"#;
 
-    let expected = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","msg_id":1,"in_reply_to":1,"echo":"Please echo 35"}}
-"#;
+    let expected = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","msg_id":1,"in_reply_to":1,"echo":"Please echo 35"}}"#;
 
     // Necessary to implement Read trait on BufReader for bytes
     let mut vec: Vec<u8> = Vec::new();
