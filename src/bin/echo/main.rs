@@ -1,8 +1,8 @@
-use ::tracing::info;
+use ::tracing::{error, info};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::default::Default;
-use std::io::{self, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
@@ -171,7 +171,6 @@ fn listen_echo_message() {
 }
 
 fn main() {
-    let stdin = io::stdin();
     let mut stdout = io::stdout().lock();
 
     // Initialize the default subscriber, which logs to stdout
@@ -182,7 +181,13 @@ fn main() {
 
     info!("starting lodiseval...");
 
-    loop {
-        let _ = listen(&stdin, &mut stdout);
+    for line in io::stdin().lines() {
+        if let Ok(l) = line {
+            info!("line: {:?}", l);
+            let buf = Cursor::new(l);
+            let _ = listen(buf, &mut stdout);
+        } else {
+            error!("error reading line: {:?}", line);
+        }
     }
 }
