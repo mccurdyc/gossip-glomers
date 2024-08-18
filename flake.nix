@@ -113,6 +113,7 @@
 
               # Maelstrom
               pkgs.jdk22_headless
+              pkgs.gnuplot
             ];
           };
         };
