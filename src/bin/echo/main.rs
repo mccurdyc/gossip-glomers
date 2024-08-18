@@ -11,9 +11,9 @@ use std::io::{self, Cursor, Read, Write};
 #[serde(untagged, rename_all = "lowercase")]
 enum Message {
     Init {
-        msg_id: u8,
-        node_id: String,
-        node_ids: Vec<String>,
+        src: String,
+        dest: String,
+        body: InitReq,
     },
     Echo {
         src: String,
@@ -23,7 +23,24 @@ enum Message {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct InitReq {
+    #[serde(rename = "type")]
+    typ: String,
+    msg_id: u8,
+    node_id: String,
+    node_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct InitResp {
+    src: String,
+    dest: String,
+    // You can't nest structures in Rust for ownership reasons.
+    body: InitRespBody,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct InitRespBody {
     #[serde(rename = "type")]
     typ: String,
     in_reply_to: u8,
@@ -84,20 +101,21 @@ where
     info!(">> input: {:?}", msg);
     match msg {
         // Node didn't respond to init message
-        Message::Init {
-            msg_id,
-            node_id,
-            node_ids,
-        } => {
+        Message::Init { src, dest, body } => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.new(node_id, node_ids);
+            node.new(body.node_id, body.node_ids);
             let resp = InitResp {
-                typ: "init_ok".to_string(),
-                in_reply_to: msg_id,
+                src: dest,
+                dest: src,
+                body: InitRespBody {
+                    typ: "init_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                },
             };
-            let resp_str = serde_json::to_string(&resp)?;
+            let mut resp_str = serde_json::to_string(&resp)?;
             info!("<< output: {:?}", &resp_str);
+            resp_str.push_str("\n");
             lw.write_all(resp_str.as_bytes())?;
         }
         Message::Echo { src, dest, body } => {
