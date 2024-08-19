@@ -114,8 +114,8 @@ where
                 },
             };
             let mut resp_str = serde_json::to_string(&resp)?;
-            info!("<< output: {:?}", &resp_str);
             resp_str.push_str("\n");
+            info!("<< output: {:?}", &resp_str);
             lw.write_all(resp_str.as_bytes())?;
         }
         Message::Echo { src, dest, body } => {
@@ -129,7 +129,8 @@ where
                     echo: body.echo,
                 },
             };
-            let resp_str = serde_json::to_string(&resp)?;
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push_str("\n");
             info!("<< output: {:?}", &resp_str);
             lw.write_all(resp_str.as_bytes())?;
         }
