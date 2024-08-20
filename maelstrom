@@ -4,4 +4,4 @@
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-exec java -Djava.awt.headless=true -jar "${SCRIPT_DIR}/lib/maelstrom.jar" "$@"
+exec java -Djava.awt.headless=true -jar "${SCRIPT_DIR}/maelstrom.jar" "$@"
