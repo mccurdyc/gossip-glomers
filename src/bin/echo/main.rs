@@ -1,49 +1,23 @@
-use ::tracing::{error, info};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::default::Default;
 use std::io::{self, Cursor, Read, Write};
+use tracing::{error, info};
+
+use init;
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
 // the type based on different internal fields in the message body.
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged, rename_all = "lowercase")]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
 enum Message {
-    Init {
-        src: String,
-        dest: String,
-        body: InitReq,
-    },
+    Init(init::Payload),
     Echo {
         src: String,
         dest: String,
         body: EchoReq,
     },
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct InitReq {
-    #[serde(rename = "type")]
-    typ: String,
-    msg_id: u8,
-    node_id: String,
-    node_ids: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct InitResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: InitRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct InitRespBody {
-    #[serde(rename = "type")]
-    typ: String,
-    in_reply_to: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -101,14 +75,14 @@ where
     info!(">> input: {:?}", msg);
     match msg {
         // Node didn't respond to init message
-        Message::Init { src, dest, body } => {
+        Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
             node.new(body.node_id, body.node_ids);
-            let resp = InitResp {
+            let resp = init::Resp {
                 src: dest,
                 dest: src,
-                body: InitRespBody {
+                body: init::RespBody {
                     typ: "init_ok".to_string(),
                     in_reply_to: body.msg_id,
                 },
@@ -144,13 +118,18 @@ fn listen_init_message() {
     use std::vec::Vec;
 
     let input = r#"{
-    "type": "init",
-    "msg_id": 1,
-    "node_id": "n3",
-    "node_ids": ["n1", "n2", "n3"]
+    "src": "c1",
+    "dest": "n1",
+    "body": {
+        "type": "init",
+        "msg_id": 1,
+        "node_id": "n3",
+        "node_ids": ["n1", "n2", "n3"]
+    }
 }"#;
 
-    let expected = r#"{"type":"init_ok","in_reply_to":1}"#;
+    let expected = r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+"#;
 
     // Necessary to implement Read trait on BufReader for bytes
     let mut vec: Vec<u8> = Vec::new();
@@ -177,7 +156,8 @@ fn listen_echo_message() {
     }
 }"#;
 
-    let expected = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","msg_id":1,"in_reply_to":1,"echo":"Please echo 35"}}"#;
+    let expected = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","msg_id":1,"in_reply_to":1,"echo":"Please echo 35"}}
+"#;
 
     // Necessary to implement Read trait on BufReader for bytes
     let mut vec: Vec<u8> = Vec::new();

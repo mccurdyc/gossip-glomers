@@ -3,6 +3,14 @@ name = "app"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "echo"
+path = "src/bin/echo/main.rs"
+
+[lib]
+name = "init"
+path = "src/init.rs"
+
 [dependencies]
 anyhow = "1.0.86"
 clap = { version = "4.5.8", features = ["derive"] }
