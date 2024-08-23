@@ -4,8 +4,6 @@ use std::default::Default;
 use std::io::{self, Cursor, Read, Write};
 use tracing::{error, info};
 
-use init;
-
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
 // the type based on different internal fields in the message body.
@@ -47,12 +45,14 @@ struct EchoRespBody {
 
 #[derive(Default)]
 struct Node {
+    #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
+    #[allow(dead_code)]
     node_ids: Vec<String>,
 }
 
 impl Node {
-    fn new(&mut self, node_id: String, node_ids: Vec<String>) -> Self {
+    fn init(&mut self, node_id: String, node_ids: Vec<String>) -> Self {
         Self {
             id: node_id,
             node_ids,
@@ -78,7 +78,7 @@ where
         Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.new(body.node_id, body.node_ids);
+            node.init(body.node_id, body.node_ids);
             let resp = init::Resp {
                 src: dest,
                 dest: src,
@@ -88,7 +88,7 @@ where
                 },
             };
             let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push_str("\n");
+            resp_str.push('\n');
             info!("<< output: {:?}", &resp_str);
             lw.write_all(resp_str.as_bytes())?;
         }
@@ -104,7 +104,7 @@ where
                 },
             };
             let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push_str("\n");
+            resp_str.push('\n');
             info!("<< output: {:?}", &resp_str);
             lw.write_all(resp_str.as_bytes())?;
         }
