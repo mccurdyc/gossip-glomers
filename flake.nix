@@ -68,6 +68,15 @@
             pre-commit-check = inputs.pre-commit-hooks.lib.${system}.run {
               src = ./.;
               hooks = {
+                # Project
+                just-test = {
+                  enable = true;
+                  name = "just-test";
+                  entry = "just test";
+                  stages = [ "pre-commit" ];
+                  pass_filenames = false;
+                };
+
                 # Nix
                 deadnix.enable = true;
                 nixpkgs-fmt.enable = true;
@@ -76,7 +85,6 @@
                 # Rust
                 rustfmt.enable = true;
                 cargo-check.enable = true;
-                cargo-test.enable = true;
                 # clippy.enable = true;
 
                 # Shell
