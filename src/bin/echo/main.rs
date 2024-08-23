@@ -113,9 +113,23 @@ where
 }
 
 #[test]
+fn init_test() {
+    match tracing_subscriber::fmt()
+        .with_writer(std::io::stderr) // all debug logs have to go to stderr
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init()
+    {
+        Ok(_) => {}
+        Err(_) => {}
+    }
+}
+
+#[test]
 fn listen_init_message() {
     use std::io::Cursor;
     use std::vec::Vec;
+
+    init_test();
 
     let input = r#"{
     "src": "c1",
@@ -145,6 +159,7 @@ fn listen_init_message() {
 fn listen_echo_message() {
     use std::io::Cursor;
     use std::vec::Vec;
+    init_test();
 
     let input = r#"{
     "src": "c1",
