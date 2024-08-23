@@ -76,6 +76,7 @@
                 # Rust
                 rustfmt.enable = true;
                 cargo-check.enable = true;
+                cargo-test.enable = true;
                 # clippy.enable = true;
 
                 # Shell
