@@ -75,7 +75,7 @@
 
                 # Rust
                 rustfmt.enable = true;
-                # cargo-check.enable = true;
+                cargo-check.enable = true;
                 # clippy.enable = true;
 
                 # Shell
@@ -96,7 +96,10 @@
 
           devShells.default = pkgs.mkShell {
             inherit (self.checks.${system}.pre-commit-check) shellHook;
+            nativeBuildInputs = with pkgs; [ rustc cargo gcc rustfmt clippy ];
             buildInputs = self.checks.${system}.pre-commit-check.enabledPackages;
+
+            RUST_SRC_PATH = "${pkgs.rust.packages.${rustChannel}.rustPlatform.rustLibSrc}";
 
             # https://github.com/NixOS/nixpkgs/blob/736142a5ae59df3a7fc5137669271183d8d521fd/doc/build-helpers/special/mkshell.section.md?plain=1#L1
             packages = [
@@ -109,7 +112,6 @@
               pkgs.openssl
               pkgs.rust-analyzer
               pkgs.rustPackages.clippy
-              rustVersion
 
               # Maelstrom
               pkgs.jdk22_headless
