@@ -77,6 +77,14 @@
                   pass_filenames = false;
                 };
 
+                just-lint = {
+                  enable = true;
+                  name = "just-lint";
+                  entry = "just lint";
+                  stages = [ "pre-commit" ];
+                  pass_filenames = false;
+                };
+
                 # Nix
                 deadnix.enable = true;
                 nixpkgs-fmt.enable = true;
@@ -85,7 +93,6 @@
                 # Rust
                 rustfmt.enable = true;
                 cargo-check.enable = true;
-                # clippy.enable = true;
 
                 # Shell
                 shellcheck.enable = true;

@@ -7,3 +7,6 @@ export JUST_LOG := log
 
 test:
     cargo test -- --nocapture
+
+lint:
+    cargo clippy
