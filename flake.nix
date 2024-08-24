@@ -104,13 +104,15 @@
             };
           };
 
-          # 'nix build'
-          # TODO - need to fix the binary
-          packages.echo = rustPlatform.buildRustPackage {
-            pname = "echo";
-            version = "0.1.0";
-            src = ./.; # the folder with the cargo.toml
-            cargoLock.lockFile = ./Cargo.lock;
+          packages = {
+            # nix build '.#echo'
+            # nix run '.#echo'
+            echo = rustPlatform.buildRustPackage {
+              pname = "echo";
+              version = "0.1.0";
+              src = ./.; # the folder with the cargo.toml
+              cargoLock.lockFile = ./Cargo.lock;
+            };
           };
 
           devShells.default = pkgs.mkShell {
