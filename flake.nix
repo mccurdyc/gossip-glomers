@@ -9,9 +9,7 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    # Why do you need this?
-    # - My understanding is for a pure binary installation of the Rust toolchain
-    # as opposed to ... (IDK).
+    # For a pure binary installation of the Rust toolchain
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -42,32 +40,34 @@
             inherit system overlays;
             config.allowUnfree = true;
           };
-          v = "1.79.0";
-          # v = "latest";
+          # v = "1.77.2";
+          v = "latest";
           rustChannel = "stable";
           # rustChannel = nightly
           # rustChannel = beta
-          rustVersion = pkgs.rust-bin.${rustChannel}.${v}.default.override {
+          pinnedRust = pkgs.rust-bin.${rustChannel}.${v}.default.override {
             extensions = [
               "rust-src"
               "rust-analyzer"
             ];
           };
 
+          # Used for 'nix build'
           rustPlatform = pkgs.makeRustPlatform {
-            cargo = rustVersion;
-            rustc = rustVersion;
+            cargo = pinnedRust;
+            rustc = pinnedRust;
           };
         in
         {
           # This is needed for pkgs-unstable - https://github.com/hercules-ci/flake-parts/discussions/105
-          overlayAttrs = { inherit pkgs-unstable; };
+          overlayAttrs = { inherit pkgs-unstable overlays; };
 
           formatter = pkgs.nixpkgs-fmt;
 
           # https://github.com/cachix/git-hooks.nix
           # 'nix flake check'
           checks = {
+            # 'pre-commit run' to test directly
             pre-commit-check = inputs.pre-commit-hooks.lib.${system}.run {
               src = ./.;
               hooks = {
@@ -104,19 +104,23 @@
             };
           };
 
-          # nix build
-          packages.default = rustPlatform.buildRustPackage {
-            pname = "app";
+          # 'nix build'
+          # TODO - need to fix the binary
+          packages.echo = rustPlatform.buildRustPackage {
+            pname = "echo";
             version = "0.1.0";
             src = ./.; # the folder with the cargo.toml
-
             cargoLock.lockFile = ./Cargo.lock;
           };
 
           devShells.default = pkgs.mkShell {
             inherit (self.checks.${system}.pre-commit-check) shellHook;
-            nativeBuildInputs = with pkgs; [ rustc cargo gcc rustfmt clippy ];
-            buildInputs = self.checks.${system}.pre-commit-check.enabledPackages;
+            nativeBuildInputs = with pkgs; [
+              gcc
+            ];
+            buildInputs = with pkgs; [
+              pinnedRust
+            ] ++ self.checks.${system}.pre-commit-check.enabledPackages;
 
             # https://github.com/NixOS/nixpkgs/blob/736142a5ae59df3a7fc5137669271183d8d521fd/doc/build-helpers/special/mkshell.section.md?plain=1#L1
             packages = [
@@ -126,9 +130,12 @@
               pkgs-unstable.nil
 
               # Rust
+              # NOTES:
+              # - Be careful defining rust tools (e.g., clippy) here because
+              # you need to guarantee they use the same Tust version as defined
+              # in rustVersion.
               pkgs.openssl
               pkgs.rust-analyzer
-              pkgs.rustPackages.clippy
 
               # Maelstrom
               pkgs.jdk22_headless
