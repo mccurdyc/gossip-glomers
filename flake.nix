@@ -130,6 +130,8 @@
               pkgs.statix
               pkgs.nixpkgs-fmt
               pkgs-unstable.nil
+              pkgs.hadolint
+              pkgs.dockerfile-language-server-nodejs
 
               # Rust
               # NOTES:
