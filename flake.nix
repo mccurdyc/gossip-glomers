@@ -132,6 +132,7 @@
               pkgs-unstable.nil
               pkgs.hadolint
               pkgs.dockerfile-language-server-nodejs
+              pkgs.dive
 
               # Rust
               # NOTES:

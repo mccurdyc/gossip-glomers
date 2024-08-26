@@ -1,28 +1,23 @@
-FROM lukemathwalker/cargo-chef:0.1.67-rust-1.80-alpine3.20 as pin
-WORKDIR /app
-RUN apk update \
-  && apk add --no-cache musl-utils clang
+FROM lukemathwalker/cargo-chef:0.1.67-rust-1.80-alpine3.20 as chef
+WORKDIR /usr/src/app
 
-FROM pin as hash
+FROM chef as planner
 COPY . .
 # Compute a lock-like file for our project
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM pin as builder
-WORKDIR /app
-COPY --from=hash /app/recipe.json recipe.json
+FROM chef as builder
+WORKDIR /usr/src/app
+COPY --from=planner /usr/src/app/recipe.json recipe.json
 # Build our project dependencies, not our application!
 RUN cargo chef cook --release --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 # Build our project
-# Need to cross-compile for alpine
-RUN cargo build --target x86_64-unknown-linux-musl --release --bin echo
+COPY . .
+RUN cargo build --release
 
 FROM alpine:3.20 AS runtime
-WORKDIR /app
-RUN apk update \
-  && apk add openssl ca-certificates \
-  && apk cache clean
-COPY --from=builder /app/target/release/echo echo
-ENTRYPOINT ["echo"]
+RUN apk add --no-cache openssl ca-certificates
+COPY --from=builder /usr/src/app/target/release/ /usr/local/bin/
+CMD ["/usr/local/bin/echo"]

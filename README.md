@@ -21,6 +21,12 @@ I am using this as the first implementation of what I will end up codifying in m
 
 1. `nix run '.#echo'`
 
+### Docker
+
+```bash
+docker run -it echo
+```
+
 ## Maelstrom
 
 TODO: convert this to a nix test
