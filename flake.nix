@@ -113,6 +113,15 @@
               src = ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
             };
+
+            # nix build '.#unique'
+            # nix run '.#unique'
+            unique = rustPlatform.buildRustPackage {
+              pname = "unique";
+              version = "0.1.0";
+              src = ./.; # the folder with the cargo.toml
+              cargoLock.lockFile = ./Cargo.lock;
+            };
           };
 
           devShells.default = pkgs.mkShell {

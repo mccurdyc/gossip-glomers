@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use app::echo;
+    use app::{echo, unique};
     use once_cell::sync::Lazy;
     use std::io::Cursor;
     use std::vec::Vec;
@@ -50,6 +50,41 @@ mod tests {
             let read_cursor = Cursor::new(input.as_bytes());
 
             echo::listen(read_cursor, &mut write_cursor).expect("listen failed");
+
+            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn unique() {
+        let test_cases = vec![
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"generate_ok","msg_id":1,"in_reply_to":1,"id":"TODO hash with time fixed"}}
+"#,
+            ),
+            (
+                r#"{"src":"f11","dest":"z10","body":{"type":"generate","msg_id":99}}
+"#,
+                r#"{"src":"z10","dest":"f11","body":{"type":"generate_ok","msg_id":99,"in_reply_to":99,"id":"TODO hash with time fixed"}}
+"#,
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            unique::listen(read_cursor, &mut write_cursor).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
