@@ -1,11 +1,18 @@
+use crate::config;
 use anyhow::Result;
 use std::io::{BufRead, Cursor, Read, Write};
 use tracing::{error, info};
 
-pub fn run<F, BR, W>(listen: F, reader: BR, writer: &mut W) -> Result<()>
+pub fn run<F, BR, W, T>(
+    listen: F,
+    reader: BR,
+    writer: &mut W,
+    cfg: &config::Config<T>,
+) -> Result<()>
 where
     W: Write,
-    F: Fn(Box<dyn Read>, &mut W) -> Result<()>,
+    T: config::TimeSource,
+    F: Fn(Box<dyn Read>, &mut W, &config::Config<T>) -> Result<()>,
     BR: BufRead,
 {
     // Initialize the default subscriber, which logs to stdout
@@ -20,7 +27,7 @@ where
         if let Ok(l) = line {
             info!("line: {:?}", l);
             let buf: Box<dyn Read> = Box::new(Cursor::new(l));
-            let _ = listen(buf, writer);
+            let _ = listen(buf, writer, cfg);
         } else {
             error!("error reading line: {:?}", line);
         }

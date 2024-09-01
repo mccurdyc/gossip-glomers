@@ -1,4 +1,4 @@
-use crate::{init, node};
+use crate::{config, init, node};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -47,10 +47,11 @@ enum Message {
     Echo(Payload),
 }
 
-pub fn listen<R, W>(reader: R, writer: &mut W) -> Result<()>
+pub fn listen<R, W, T>(reader: R, writer: &mut W, _cfg: &config::Config<T>) -> Result<()>
 where
     R: Read,
     W: Write,
+    T: config::TimeSource,
 {
     // CRITICAL: I'm pretty sure this will lose all state the way it
     // currently exists inside of the loop.

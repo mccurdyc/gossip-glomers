@@ -1,9 +1,8 @@
-use crate::{init, node};
+use crate::{config, init, node};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use std::time::SystemTime;
 use tracing::info;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -49,10 +48,11 @@ enum Message {
     Unique(Payload),
 }
 
-pub fn listen<R, W>(reader: R, writer: &mut W) -> Result<()>
+pub fn listen<R, W, T>(reader: R, writer: &mut W, cfg: &config::Config<T>) -> Result<()>
 where
     R: Read,
     W: Write,
+    T: config::TimeSource,
 {
     // CRITICAL: I'm pretty sure this will lose all state the way it
     // currently exists inside of the loop.
@@ -83,7 +83,7 @@ where
         }
         Message::Unique(Payload { src, dest, body }) => {
             let hash = Sha256::digest(
-                format!("{}-{}-{:?}", dest, body.msg_id, SystemTime::now()).into_bytes(),
+                format!("{}-{}-{:?}", dest, body.msg_id, cfg.time_source.now()).into_bytes(),
             );
             let resp = Resp {
                 src: dest,

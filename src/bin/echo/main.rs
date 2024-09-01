@@ -1,7 +1,15 @@
+use app::config;
+use app::config::SystemTime;
 use app::echo;
 use app::run::run;
 use std::io;
 
 fn main() {
-    run(echo::listen, io::stdin().lock(), &mut io::stdout().lock()).expect("failed to start");
+    run(
+        echo::listen,
+        io::stdin().lock(),
+        &mut io::stdout().lock(),
+        &config::Config::<SystemTime>::new(&SystemTime {}),
+    )
+    .expect("failed to start");
 }
