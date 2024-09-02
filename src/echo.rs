@@ -16,7 +16,7 @@ struct Payload {
 struct ReqBody {
     #[serde(rename = "type")]
     typ: String,
-    msg_id: u8,
+    msg_id: u32,
     echo: String,
 }
 
@@ -32,8 +32,8 @@ struct Resp {
 struct RespBody {
     #[serde(rename = "type")]
     typ: String,
-    msg_id: u8,
-    in_reply_to: u8,
+    msg_id: u32,
+    in_reply_to: u32,
     echo: String,
 }
 

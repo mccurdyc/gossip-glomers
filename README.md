@@ -31,10 +31,32 @@ docker run -it echo
 
 TODO: convert this to a nix test
 
+### 1. Echo
+
 ```bash
 ./maelstrom test \
     -w echo \
-    --bin $(pwd)/target/debug/echo \
+    --bin $(pwd)/target/release/echo \
     --node-count 1 \
     --time-limit 10
 ```
+
+### 2. Unique IDs
+
+```bash
+./maelstrom test \
+    -w unique-ids \
+    --bin $(pwd)/target/release/unique-ids \
+    --time-limit 30 \
+    --rate 1000 \
+    --node-count 3 \
+    --availability total \
+    --nemesis partition
+```
+
+### Debugging Failures
+
+```bash
+./maelstrom serve
+```
+

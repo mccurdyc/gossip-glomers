@@ -12,7 +12,7 @@ pub struct Payload {
 pub struct ReqBody {
     #[serde(rename = "type")]
     pub typ: String,
-    pub msg_id: u8,
+    pub msg_id: u32,
     pub node_id: String,
     pub node_ids: Vec<String>,
 }
@@ -29,5 +29,5 @@ pub struct Resp {
 pub struct RespBody {
     #[serde(rename = "type")]
     pub typ: String,
-    pub in_reply_to: u8,
+    pub in_reply_to: u32,
 }

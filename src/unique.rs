@@ -2,6 +2,7 @@ use crate::{config, init, node};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use tracing::info;
 
@@ -17,7 +18,7 @@ struct Payload {
 struct ReqBody {
     #[serde(rename = "type")]
     typ: String,
-    msg_id: u8,
+    msg_id: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -32,8 +33,8 @@ struct Resp {
 struct RespBody {
     #[serde(rename = "type")]
     typ: String,
-    msg_id: u8,
-    in_reply_to: u8,
+    msg_id: u32,
+    in_reply_to: u32,
     #[serde(rename = "id")]
     unique_id: String,
 }
@@ -46,6 +47,8 @@ struct RespBody {
 enum Message {
     Init(init::Payload),
     Unique(Payload),
+    Other(HashMap<String, serde_json::Value>), // Why is it getting deserialized as Other? It fails
+                                               // to deserialize as Other(Payload).
 }
 
 pub fn listen<R, W, T>(reader: R, writer: &mut W, cfg: &config::Config<T>) -> Result<()>
@@ -99,6 +102,9 @@ where
             resp_str.push('\n');
             info!("<< output: {:?}", &resp_str);
             writer.write_all(resp_str.as_bytes())?;
+        }
+        Message::Other(m) => {
+            info!("other: {:?}", m);
         }
     };
     Ok(())

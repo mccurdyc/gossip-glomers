@@ -27,7 +27,12 @@ where
         if let Ok(l) = line {
             info!("line: {:?}", l);
             let buf: Box<dyn Read> = Box::new(Cursor::new(l));
-            let _ = listen(buf, writer, cfg);
+            let _ = match listen(buf, writer, cfg) {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("error listening: {:?}", e);
+                }
+            };
         } else {
             error!("error reading line: {:?}", line);
         }
