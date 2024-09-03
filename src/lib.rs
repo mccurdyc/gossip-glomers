@@ -1,3 +1,4 @@
+pub mod broadcast;
 pub mod config;
 pub mod echo;
 pub mod init;
