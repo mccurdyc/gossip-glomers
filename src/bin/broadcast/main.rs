@@ -1,11 +1,13 @@
 use app::broadcast;
 use app::config;
 use app::config::SystemTime;
-use app::run::run;
+use app::node;
 use std::io;
 
 fn main() {
-    run(
+    let node: node::Node = Default::default();
+
+    node.run(
         broadcast::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),

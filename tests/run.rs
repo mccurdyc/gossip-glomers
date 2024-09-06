@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use app::config::{Config, SystemTime};
-    use app::{broadcast, echo, unique};
+    use app::{broadcast, echo, node, unique};
     use once_cell::sync::Lazy;
     use std::io::Cursor;
     use std::vec::Vec;
@@ -148,8 +148,10 @@ mod tests {
             let mut vec: Vec<u8> = Vec::new();
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
+            let mut node: node::Node = Default::default();
 
             broadcast::listen(
+                &mut node,
                 read_cursor,
                 &mut write_cursor,
                 &Config::<SystemTime>::new(&SystemTime {}),
