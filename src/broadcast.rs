@@ -1,7 +1,6 @@
 use crate::{config, init, node};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use tracing::info;
@@ -52,7 +51,6 @@ struct BroadcastResp {
 struct BroadcastRespBody {
     #[serde(rename = "type")]
     typ: String, // broadcast_ok
-    msg_id: u32,
     in_reply_to: u32,
 }
 
@@ -83,7 +81,6 @@ struct ReadResp {
 struct ReadRespBody {
     #[serde(rename = "type")]
     typ: String, // read_ok
-    msg_id: u32,
     in_reply_to: u32,
     messages: Vec<u32>,
 }
@@ -118,7 +115,6 @@ struct TopologyResp {
 struct TopologyRespBody {
     #[serde(rename = "type")]
     typ: String, // topology_ok
-    msg_id: u32,
     in_reply_to: u32,
 }
 
@@ -135,7 +131,7 @@ enum Message {
     Other(HashMap<String, serde_json::Value>),
 }
 
-pub fn listen<R, W, T>(reader: R, writer: &mut W, cfg: &config::Config<T>) -> Result<()>
+pub fn listen<R, W, T>(reader: R, writer: &mut W, _cfg: &config::Config<T>) -> Result<()>
 where
     R: Read,
     W: Write,
@@ -169,13 +165,59 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Broadcast(BroadcastPayload { src, dest, body }) => {
-            todo!("broadcast");
+            node.store(serde_json::to_value(&body)?)?;
+            let resp = BroadcastResp {
+                src: dest,
+                dest: src,
+                body: BroadcastRespBody {
+                    typ: "broadcast_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                },
+            };
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push('\n');
+            info!("<< output: {:?}", &resp_str);
+            writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            todo!("read");
+            let messages: Vec<u32> = node
+                .retreive_seen_messages()?
+                .iter()
+                .map(move |m| {
+                    let b: BroadcastReqBody =
+                        serde_json::from_value(m.clone()).expect("failed to parse stored message");
+                    b.message
+                })
+                .collect();
+            let resp = ReadResp {
+                src: dest,
+                dest: src,
+                body: ReadRespBody {
+                    typ: "read_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                    messages,
+                },
+            };
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push('\n');
+            info!("<< output: {:?}", &resp_str);
+            writer.write_all(resp_str.as_bytes())?;
         }
         Message::Topology(TopologyPayload { src, dest, body }) => {
-            todo!("topology");
+            // TODO: right now we just ignore this message body because it doesnt
+            // matter yet.
+            let resp = TopologyResp {
+                src: dest,
+                dest: src,
+                body: TopologyRespBody {
+                    typ: "topology_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                },
+            };
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push('\n');
+            info!("<< output: {:?}", &resp_str);
+            writer.write_all(resp_str.as_bytes())?;
         }
         Message::Other(m) => {
             info!("other: {:?}", m);

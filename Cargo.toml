@@ -7,6 +7,14 @@ edition = "2021"
 name = "echo"
 path = "src/bin/echo/main.rs"
 
+[[bin]]
+name = "unique"
+path = "src/bin/unique-id/main.rs"
+
+[[bin]]
+name = "broadcast"
+path = "src/bin/broadcast/main.rs"
+
 [dependencies]
 anyhow = "1.0.86"
 clap = { version = "4.5.8", features = ["derive"] }

@@ -109,7 +109,7 @@
             # nix run '.#echo'
             echo = rustPlatform.buildRustPackage {
               pname = "echo";
-              version = "0.1.0";
+              version = "1.0.0";
               src = ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
             };
@@ -118,6 +118,15 @@
             # nix run '.#unique'
             unique = rustPlatform.buildRustPackage {
               pname = "unique";
+              version = "1.0.0";
+              src = ./.; # the folder with the cargo.toml
+              cargoLock.lockFile = ./Cargo.lock;
+            };
+
+            # nix build '.#broadcast'
+            # nix run '.#broadcast'
+            broadcast = rustPlatform.buildRustPackage {
+              pname = "broadcast";
               version = "0.1.0";
               src = ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;

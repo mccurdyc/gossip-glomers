@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use app::config::{Config, SystemTime};
-    use app::{echo, unique};
+    use app::{broadcast, echo, unique};
     use once_cell::sync::Lazy;
     use std::io::Cursor;
     use std::vec::Vec;
@@ -101,6 +101,58 @@ mod tests {
                 read_cursor,
                 &mut write_cursor,
                 &Config::<MockTime>::new(&MockTime {}),
+            )
+            .expect("listen failed");
+
+            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn broadcast() {
+        let test_cases = vec![
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 1000}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":1}}
+"#,
+            ),
+            (
+                r#"{"src":"f11","dest":"z10","body":{"type":"broadcast","msg_id":99, "message": 42}}
+"#,
+                r#"{"src":"z10","dest":"f11","body":{"type":"broadcast_ok","in_reply_to":99}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1000,42]}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":101,"topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":101}}
+"#,
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            broadcast::listen(
+                read_cursor,
+                &mut write_cursor,
+                &Config::<SystemTime>::new(&SystemTime {}),
             )
             .expect("listen failed");
 
