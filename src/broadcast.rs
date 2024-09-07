@@ -126,8 +126,9 @@ struct TopologyRespBody {
 enum Message {
     Init(init::Payload),
     Broadcast(BroadcastPayload),
-    Read(ReadPayload),
     Topology(TopologyPayload),
+    // CRITICAL: read has to come AFTER topology because the message is less specific
+    Read(ReadPayload),
     Other(HashMap<String, serde_json::Value>),
 }
 
@@ -167,6 +168,8 @@ where
         }
         Message::Broadcast(BroadcastPayload { src, dest, body }) => {
             node.store(serde_json::to_value(&body)?)?;
+            info!("node: {:?}", node);
+
             let resp = BroadcastResp {
                 src: dest,
                 dest: src,
@@ -175,12 +178,14 @@ where
                     in_reply_to: body.msg_id,
                 },
             };
+
             let mut resp_str = serde_json::to_string(&resp)?;
             resp_str.push('\n');
             info!("<< output: {:?}", &resp_str);
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
+            info!("node in read: {:?}", node);
             let messages: Vec<u32> = node
                 .retreive_seen_messages()?
                 .iter()
@@ -190,6 +195,7 @@ where
                     b.message
                 })
                 .collect();
+            info!("messages: {:?}", messages);
             let resp = ReadResp {
                 src: dest,
                 dest: src,
@@ -205,8 +211,7 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Topology(TopologyPayload { src, dest, body }) => {
-            // TODO: right now we just ignore this message body because it doesnt
-            // matter yet.
+            // TODO: right now we do nothing here
             let resp = TopologyResp {
                 src: dest,
                 dest: src,

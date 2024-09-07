@@ -4,7 +4,7 @@ use serde_json;
 use std::io::{BufRead, Cursor, Read, Write};
 use tracing::{error, info};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Node {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
@@ -67,7 +67,7 @@ impl Node {
         Ok(())
     }
 
-    pub fn retreive_seen_messages(&mut self) -> Result<&Vec<serde_json::Value>> {
-        Ok(&self.store)
+    pub fn retreive_seen_messages(&mut self) -> Result<Vec<serde_json::Value>> {
+        Ok(self.store.clone())
     }
 }

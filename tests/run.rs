@@ -143,12 +143,13 @@ mod tests {
             ),
         ];
 
+        let mut node: node::Node = Default::default();
+
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
-            let mut node: node::Node = Default::default();
 
             broadcast::listen(
                 &mut node,
