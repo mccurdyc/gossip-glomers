@@ -51,6 +51,8 @@ mod tests {
             ),
         ];
 
+        let mut node: node::Node = Default::default();
+
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
@@ -58,6 +60,7 @@ mod tests {
             let read_cursor = Cursor::new(input.as_bytes());
 
             echo::listen(
+                &mut node,
                 read_cursor,
                 &mut write_cursor,
                 &Config::<SystemTime>::new(&SystemTime {}),
@@ -91,6 +94,8 @@ mod tests {
             ),
         ];
 
+        let mut node: node::Node = Default::default();
+
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
@@ -98,6 +103,7 @@ mod tests {
             let read_cursor = Cursor::new(input.as_bytes());
 
             unique::listen(
+                &mut node,
                 read_cursor,
                 &mut write_cursor,
                 &Config::<MockTime>::new(&MockTime {}),

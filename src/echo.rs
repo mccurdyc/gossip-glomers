@@ -47,16 +47,17 @@ enum Message {
     Echo(Payload),
 }
 
-pub fn listen<R, W, T>(reader: R, writer: &mut W, _cfg: &config::Config<T>) -> Result<()>
+pub fn listen<R, W, T>(
+    node: &mut node::Node,
+    reader: R,
+    writer: &mut W,
+    _cfg: &config::Config<T>,
+) -> Result<()>
 where
     R: Read,
     W: Write,
     T: config::TimeSource,
 {
-    // CRITICAL: I'm pretty sure this will lose all state the way it
-    // currently exists inside of the loop.
-    let node: &mut node::Node = &mut Default::default();
-
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
     let msg: Message = serde_json::from_reader(reader)?;

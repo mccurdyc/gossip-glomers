@@ -3,6 +3,7 @@
 
   # References
   # - https://ryantm.github.io/nixpkgs/languages-frameworks/rust/
+  # - https://github.com/tfc/rust_async_http_code_experiment/blob/master/flake.nix
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
@@ -40,7 +41,7 @@
             inherit system overlays;
             config.allowUnfree = true;
           };
-          # v = "1.77.2";
+          # v = "1.80.1";
           v = "latest";
           rustChannel = "stable";
           # rustChannel = nightly
@@ -110,8 +111,22 @@
             echo = rustPlatform.buildRustPackage {
               pname = "echo";
               version = "1.0.0";
-              src = ./.; # the folder with the cargo.toml
+              src = pkgs.lib.cleanSource ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
+              cargoBuildFlags = [ "--bin" "echo" ];
+              doCheck = false; # disable so that these can be built independently
+              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
+              doInstallCheck = true; # disable so that these can be built independently
+              nativeInstallCheckInputs = with pkgs; [
+                # breakpointHook # debugging
+                jdk22_headless
+                gnuplot
+                git # not sure why maelstrom needs this
+              ];
+              installCheckPhase = ''
+                echo "===> running 'maelstrom echo' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w echo --bin $out/bin/echo --node-count 1 --time-limit 10
+              '';
             };
 
             # nix build '.#unique'
@@ -121,15 +136,19 @@
               version = "1.0.0";
               src = ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
+              cargoBuildFlags = [ "--bin" "unique" ];
+              doCheck = false; # disable so that these can be built independently
             };
 
             # nix build '.#broadcast'
             # nix run '.#broadcast'
             broadcast = rustPlatform.buildRustPackage {
               pname = "broadcast";
-              version = "0.1.0";
+              version = "1.0.0";
               src = ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
+              cargoBuildFlags = [ "--bin" "broadcast" ];
+              doCheck = false; # disable so that these can be built independently
             };
           };
 

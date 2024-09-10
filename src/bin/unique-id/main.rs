@@ -1,11 +1,13 @@
 use app::config;
 use app::config::SystemTime;
-use app::run::run;
+use app::node;
 use app::unique;
 use std::io;
 
 fn main() {
-    run(
+    let node: node::Node = Default::default();
+
+    node.run(
         unique::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),

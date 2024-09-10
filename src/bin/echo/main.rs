@@ -1,11 +1,13 @@
 use app::config;
 use app::config::SystemTime;
 use app::echo;
-use app::run::run;
+use app::node;
 use std::io;
 
 fn main() {
-    run(
+    let node: node::Node = Default::default();
+
+    node.run(
         echo::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
