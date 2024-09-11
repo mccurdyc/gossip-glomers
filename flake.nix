@@ -58,6 +58,13 @@
             cargo = pinnedRust;
             rustc = pinnedRust;
           };
+
+          maelstromDeps = with pkgs; [
+            # breakpointHook # debugging
+            jdk22_headless
+            gnuplot
+            git # not sure why maelstrom needs this
+          ];
         in
         {
           # This is needed for pkgs-unstable - https://github.com/hercules-ci/flake-parts/discussions/105
@@ -117,12 +124,7 @@
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               doInstallCheck = true; # disable so that these can be built independently
-              nativeInstallCheckInputs = with pkgs; [
-                # breakpointHook # debugging
-                jdk22_headless
-                gnuplot
-                git # not sure why maelstrom needs this
-              ];
+              nativeInstallCheckInputs = maelstromDeps;
               installCheckPhase = ''
                 echo "===> running 'maelstrom echo' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w echo --bin $out/bin/echo --node-count 1 --time-limit 10
@@ -134,10 +136,17 @@
             unique = rustPlatform.buildRustPackage {
               pname = "unique";
               version = "1.0.0";
-              src = ./.; # the folder with the cargo.toml
+              src = pkgs.lib.cleanSource ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
               cargoBuildFlags = [ "--bin" "unique" ];
               doCheck = false; # disable so that these can be built independently
+              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
+              doInstallCheck = true; # disable so that these can be built independently
+              nativeInstallCheckInputs = maelstromDeps;
+              installCheckPhase = ''
+                echo "===> running 'maelstrom unique-id' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w unique-ids --bin $out/bin/unique --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
+              '';
             };
 
             # nix build '.#broadcast'
@@ -145,10 +154,17 @@
             broadcast = rustPlatform.buildRustPackage {
               pname = "broadcast";
               version = "1.0.0";
-              src = ./.; # the folder with the cargo.toml
+              src = pkgs.lib.cleanSource ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
               cargoBuildFlags = [ "--bin" "broadcast" ];
               doCheck = false; # disable so that these can be built independently
+              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
+              doInstallCheck = true; # disable so that these can be built independently
+              nativeInstallCheckInputs = maelstromDeps;
+              installCheckPhase = ''
+                echo "===> running 'maelstrom broadcast' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin $out/bin/broadcast --node-count 1 --time-limit 20 --rate 10
+              '';
             };
           };
 
