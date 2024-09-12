@@ -166,6 +166,24 @@
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin $out/bin/broadcast --node-count 1 --time-limit 20 --rate 10
               '';
             };
+
+            # nix build '.#counter'
+            # nix run '.#counter'
+            counter = rustPlatform.buildRustPackage {
+              pname = "counter";
+              version = "0.1.0";
+              src = pkgs.lib.cleanSource ./.; # the folder with the cargo.toml
+              cargoLock.lockFile = ./Cargo.lock;
+              cargoBuildFlags = [ "--bin" "counter" ];
+              doCheck = false; # disable so that these can be built independently
+              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
+              doInstallCheck = true; # disable so that these can be built independently
+              nativeInstallCheckInputs = maelstromDeps;
+              installCheckPhase = ''
+                echo "===> running 'maelstrom counter' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w counter --bin $out/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
+              '';
+            };
           };
 
           devShells.default = pkgs.mkShell {

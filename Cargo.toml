@@ -15,6 +15,10 @@ path = "src/bin/unique-id/main.rs"
 name = "broadcast"
 path = "src/bin/broadcast/main.rs"
 
+[[bin]]
+name = "counter"
+path = "src/bin/counter/main.rs"
+
 [dependencies]
 anyhow = "1.0.86"
 clap = { version = "4.5.8", features = ["derive"] }
