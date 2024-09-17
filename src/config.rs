@@ -1,3 +1,6 @@
+use crate::store;
+use std::path::Path;
+
 pub trait TimeSource {
     fn now(&self) -> std::time::SystemTime;
 }
@@ -14,11 +17,17 @@ impl TimeSource for SystemTime {
 pub struct Config<'a, T: TimeSource> {
     // This is where we set the TYPE of timesource
     pub time_source: &'a T,
+    pub store: store::Store,
 }
 
 impl<'a, T: TimeSource> Config<'a, T> {
-    pub fn new(time_source: &'a T) -> Self {
+    pub fn new(time_source: &'a T, store_path: &'a Path) -> Result<Self, anyhow::Error> {
         // This is where we set the VALUE of timesource
-        Config { time_source }
+        let s = store::Store::new(store_path)?;
+
+        Ok(Config {
+            time_source,
+            store: s,
+        })
     }
 }

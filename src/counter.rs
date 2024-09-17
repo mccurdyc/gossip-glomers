@@ -5,6 +5,13 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use tracing::info;
 
+// Goals(s):
+// - Increment a single global counter
+// - Only need eventual consistency (seconds are fine)
+//
+// Workload
+// - Adds a non-negative integer, called delta, to the counter.
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 struct AddPayload {
@@ -83,7 +90,7 @@ pub fn listen<R, W, T>(
     node: &mut node::Node,
     reader: R,
     writer: &mut W,
-    _cfg: &config::Config<T>,
+    cfg: &mut config::Config<T>,
 ) -> Result<()>
 where
     R: Read,
@@ -113,8 +120,44 @@ where
             info!("<< output: {:?}", &resp_str);
             writer.write_all(resp_str.as_bytes())?;
         }
-        Message::Add(AddPayload { src, dest, body }) => {}
-        Message::Read(ReadPayload { src, dest, body }) => {}
+        Message::Add(AddPayload { src, dest, body }) => {
+            let old = cfg.store.get()?;
+            let new = old + body.delta;
+            cfg.store.set(new)?;
+
+            let resp = AddResp {
+                src: dest,
+                dest: src,
+                body: AddRespBody {
+                    typ: "add_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                },
+            };
+
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push('\n');
+            info!("<< output: {:?}", &resp_str);
+            writer.write_all(resp_str.as_bytes())?;
+        }
+        Message::Read(ReadPayload { src, dest, body }) => {
+            let v = cfg.store.get()?;
+
+            let resp = ReadResp {
+                src: dest,
+                dest: src,
+                body: ReadRespBody {
+                    typ: "read_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                    value: v,
+                },
+            };
+
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push('\n');
+            info!("<< output: {:?}", &resp_str);
+            writer.write_all(resp_str.as_bytes())?;
+        }
+
         Message::Other(m) => {
             info!("other: {:?}", m);
         }

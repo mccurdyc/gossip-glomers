@@ -181,7 +181,7 @@
               nativeInstallCheckInputs = maelstromDeps;
               installCheckPhase = ''
                 echo "===> running 'maelstrom counter' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w counter --bin $out/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w g-counter --bin $out/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
               '';
             };
           };

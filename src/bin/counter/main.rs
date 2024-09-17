@@ -3,6 +3,7 @@ use app::config::SystemTime;
 use app::counter;
 use app::node;
 use std::io;
+use std::path::Path;
 
 fn main() {
     let node: node::Node = Default::default();
@@ -11,7 +12,8 @@ fn main() {
         counter::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
-        &config::Config::<SystemTime>::new(&SystemTime {}),
+        &mut config::Config::<SystemTime>::new(&SystemTime {}, Path::new("./data.txt"))
+            .expect("failed to get config"),
     )
     .expect("failed to start");
 }
