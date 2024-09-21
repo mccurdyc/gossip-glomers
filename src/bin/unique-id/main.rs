@@ -3,6 +3,7 @@ use app::config::SystemTime;
 use app::node;
 use app::unique;
 use std::io;
+use std::path::Path;
 
 fn main() {
     let node: node::Node = Default::default();
@@ -11,7 +12,8 @@ fn main() {
         unique::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
-        &config::Config::<SystemTime>::new(&SystemTime {}),
+        &mut config::Config::<SystemTime>::new(&SystemTime {}, &Path::new("empty"))
+            .expect("failed to create config"),
     )
     .expect("failed to start");
 }

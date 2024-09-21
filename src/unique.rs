@@ -55,7 +55,7 @@ pub fn listen<R, W, T>(
     node: &mut node::Node,
     reader: R,
     writer: &mut W,
-    cfg: &config::Config<T>,
+    cfg: &mut config::Config<T>,
 ) -> Result<()>
 where
     R: Read,

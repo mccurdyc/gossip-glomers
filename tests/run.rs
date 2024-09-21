@@ -4,6 +4,7 @@ mod tests {
     use app::{broadcast, echo, node, unique};
     use once_cell::sync::Lazy;
     use std::io::Cursor;
+    use std::path::Path;
     use std::vec::Vec;
 
     struct MockTime;
@@ -63,7 +64,8 @@ mod tests {
                 &mut node,
                 read_cursor,
                 &mut write_cursor,
-                &Config::<SystemTime>::new(&SystemTime {}),
+                &mut Config::<SystemTime>::new(&SystemTime {}, Path::new("empty"))
+                    .expect("failed to create config"),
             )
             .expect("listen failed");
 
@@ -106,7 +108,8 @@ mod tests {
                 &mut node,
                 read_cursor,
                 &mut write_cursor,
-                &Config::<MockTime>::new(&MockTime {}),
+                &mut Config::<MockTime>::new(&MockTime {}, Path::new("empty"))
+                    .expect("failed to create config"),
             )
             .expect("listen failed");
 
@@ -161,7 +164,8 @@ mod tests {
                 &mut node,
                 read_cursor,
                 &mut write_cursor,
-                &Config::<SystemTime>::new(&SystemTime {}),
+                &mut Config::<SystemTime>::new(&SystemTime {}, Path::new("empty"))
+                    .expect("failed to create config"),
             )
             .expect("listen failed");
 
