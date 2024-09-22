@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use app::config::{Config, SystemTime};
-    use app::{broadcast, echo, node, unique};
+    use app::{broadcast, counter, echo, node, unique};
     use once_cell::sync::Lazy;
-    use std::io::Cursor;
-    use std::path::Path;
+    use std::io::{Cursor, Write};
     use std::vec::Vec;
+    use tempfile::NamedTempFile;
 
     struct MockTime;
     impl app::config::TimeSource for MockTime {
@@ -22,15 +22,28 @@ mod tests {
             .init();
     });
 
-    #[test]
-    fn setup() {
+    fn setup(starting_value: u32) -> NamedTempFile {
         // The first time `initialize` is invoked the code in `TRACING` is executed.
         // All other invocations will instead skip execution.
         Lazy::force(&TRACING);
+
+        let mut f = NamedTempFile::new().expect("Failed to create test tempfile");
+        let buf = u32::to_be_bytes(starting_value);
+        f.write_all(&buf)
+            .expect("Failed to writing starting value to file");
+        f
+    }
+
+    fn cleanup(f: NamedTempFile) {
+        f.into_temp_path()
+            .close() // closes and removes
+            .expect("Failed to cleanup test tempfile")
     }
 
     #[test]
     fn echo() {
+        let f = setup(0);
+
         let test_cases = vec![
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
@@ -64,17 +77,19 @@ mod tests {
                 &mut node,
                 read_cursor,
                 &mut write_cursor,
-                &mut Config::<SystemTime>::new(&SystemTime {}, Path::new("empty"))
+                &mut Config::<SystemTime>::new(&SystemTime {}, f.path())
                     .expect("failed to create config"),
             )
             .expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
+        cleanup(f);
     }
 
     #[test]
     fn unique() {
+        let f = setup(0);
         let test_cases = vec![
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
@@ -108,17 +123,20 @@ mod tests {
                 &mut node,
                 read_cursor,
                 &mut write_cursor,
-                &mut Config::<MockTime>::new(&MockTime {}, Path::new("empty"))
+                &mut Config::<MockTime>::new(&MockTime {}, f.path())
                     .expect("failed to create config"),
             )
             .expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
+        cleanup(f);
     }
 
     #[test]
     fn broadcast() {
+        let f = setup(0);
+
         let test_cases = vec![
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
@@ -164,12 +182,57 @@ mod tests {
                 &mut node,
                 read_cursor,
                 &mut write_cursor,
-                &mut Config::<SystemTime>::new(&SystemTime {}, Path::new("empty"))
+                &mut Config::<SystemTime>::new(&SystemTime {}, f.path())
                     .expect("failed to create config"),
             )
             .expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
+        }
+        cleanup(f);
+    }
+
+    #[test]
+    fn counter() {
+        let test_cases = vec![
+            (
+                0,
+                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+"#,
+            ),
+            (
+                0,
+                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":0}}
+"#,
+            ),
+        ];
+
+        let mut node: node::Node = Default::default();
+
+        for (starting_value, input, expected) in test_cases {
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            let f = setup(starting_value);
+
+            counter::listen(
+                &mut node,
+                read_cursor,
+                &mut write_cursor,
+                &mut Config::<SystemTime>::new(&SystemTime {}, f.path())
+                    .expect("failed to create config"),
+            )
+            .expect("listen failed");
+
+            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+
+            cleanup(f);
         }
     }
 }
