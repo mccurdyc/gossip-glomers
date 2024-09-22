@@ -171,7 +171,7 @@
             # nix run '.#counter'
             counter = rustPlatform.buildRustPackage {
               pname = "counter";
-              version = "0.1.0";
+              version = "1.0.0";
               src = pkgs.lib.cleanSource ./.; # the folder with the cargo.toml
               cargoLock.lockFile = ./Cargo.lock;
               cargoBuildFlags = [ "--bin" "counter" ];
