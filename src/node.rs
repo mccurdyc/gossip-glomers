@@ -26,12 +26,12 @@ impl<S: Read + Write> Node<S> {
         listen: F,
         reader: BR,
         writer: &mut W,
-        cfg: &mut config::Config<T>,
+        cfg: &mut config::Config<T, S>,
     ) -> Result<()>
     where
         W: Write,
         T: config::TimeSource,
-        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
+        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T, S>) -> Result<()>,
         BR: BufRead,
     {
         // Initialize the default subscriber, which logs to stdout

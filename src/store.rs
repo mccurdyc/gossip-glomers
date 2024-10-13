@@ -1,6 +1,6 @@
 use fs2::FileExt;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Error, Read, Write};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ impl<'a> FileStore<'a> {
 }
 
 impl<'a> Write for FileStore<'a> {
-    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let s = self.file.write(buf)?;
         self.file.unlock()?;
@@ -29,15 +29,15 @@ impl<'a> Write for FileStore<'a> {
         Ok(s)
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> Result<usize> {
+    fn write_all(&mut self, buf: &[u8]) -> Result<(), Error> {
         self.file.lock_exclusive()?;
         self.file.write_all(buf)?;
         self.file.unlock()?;
 
-        Ok(buf.len())
+        Ok(())
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&mut self) -> Result<(), Error> {
         self.file.lock_exclusive()?;
         let s = self.file.flush()?;
         self.file.unlock()?;
@@ -46,7 +46,7 @@ impl<'a> Write for FileStore<'a> {
 }
 
 impl<'a> Read for FileStore<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let mut buf = Vec::new();
         self.file.read_to_end(&mut buf)?;

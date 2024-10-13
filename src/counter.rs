@@ -86,16 +86,17 @@ enum Message {
     Other(HashMap<String, serde_json::Value>),
 }
 
-pub fn listen<R, W, T>(
-    node: &mut node::Node,
+pub fn listen<R, W, T, S>(
+    node: &mut node::Node<S>,
     reader: R,
     writer: &mut W,
-    cfg: &mut config::Config<T>,
+    cfg: &mut config::Config<T, S>,
 ) -> Result<()>
 where
     R: Read,
     W: Write,
     T: config::TimeSource,
+    S: Read + Write,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
