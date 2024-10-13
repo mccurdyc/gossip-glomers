@@ -3,44 +3,55 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 
-pub struct Store {
-    f: File,
+#[derive(Debug)]
+pub struct FileStore<'a> {
+    file: File,
+    path: &'a Path,
 }
 
-impl Store {
-    pub fn new(path: &Path) -> Result<Self, std::io::Error> {
-        let f = OpenOptions::new().read(true).write(true).open(path)?;
-        Ok(Store { f })
+impl<'a> FileStore<'a> {
+    pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
+        let f = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(path)?;
+        Ok(FileStore { file: f, path })
+    }
+}
+
+impl<'a> Write for FileStore<'a> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        self.file.lock_exclusive()?;
+        let s = self.file.write(buf)?;
+        self.file.unlock()?;
+
+        Ok(s)
     }
 
-    pub fn set(&mut self, v: u32) -> Result<(), std::io::Error> {
-        self.f.lock_exclusive()?;
+    fn write_all(&mut self, buf: &[u8]) -> Result<usize> {
+        self.file.lock_exclusive()?;
+        self.file.write_all(buf)?;
+        self.file.unlock()?;
 
-        // write
-        let buf = u32::to_be_bytes(v);
-        self.f.write_all(&buf)?;
+        Ok(buf.len())
+    }
 
-        self.f.unlock()?;
+    fn flush(&mut self) -> Result<()> {
+        self.file.lock_exclusive()?;
+        let s = self.file.flush()?;
+        self.file.unlock()?;
         Ok(())
     }
+}
 
-    /// get assumes that the calling function will have the lock
-    pub fn get(&mut self) -> Result<u32, std::io::Error> {
-        self.f.lock_exclusive()?;
+impl<'a> Read for FileStore<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        self.file.lock_exclusive()?;
+        let mut buf = Vec::new();
+        self.file.read_to_end(&mut buf)?;
+        self.file.unlock()?;
 
-        let v = self.get_as_u32()?;
-
-        self.f.unlock()?;
-        Ok(v)
-    }
-
-    fn get_as_u32(&mut self) -> Result<u32, std::io::Error> {
-        // read
-        let mut buf = [0u8; 4]; // 4 bytes for u32
-        self.f.read_exact(&mut buf)?;
-        // convert to u32
-        //  Little Endian (LE): The least significant byte is stored first.
-        //  This is commonly used in modern architectures, such as x86 and x86-64
-        Ok(u32::from_be_bytes(buf))
+        Ok(buf.len())
     }
 }

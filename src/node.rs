@@ -1,25 +1,23 @@
 use crate::config;
 use anyhow::Result;
-use serde_json;
 use std::io::{BufRead, Cursor, Read, Write};
 use tracing::{error, info};
 
-#[derive(Default, Debug)]
-pub struct Node {
+pub struct Node<S: Read + Write> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
     #[allow(dead_code)]
     node_ids: Vec<String>,
-    // I'm not sure I love the idea of storing the entire JSON object
-    store: Vec<serde_json::Value>,
+
+    pub store: S,
 }
 
-impl Node {
-    pub fn init(&mut self, node_id: String, node_ids: Vec<String>) -> Self {
+impl<S: Read + Write> Node<S> {
+    pub fn init(&mut self, node_id: String, node_ids: Vec<String>, s: S) -> Self {
         Self {
             id: node_id,
             node_ids,
-            store: Vec::<serde_json::Value>::new(),
+            store: s,
         }
     }
 
@@ -60,14 +58,5 @@ impl Node {
         }
 
         Ok(())
-    }
-
-    pub fn store(&mut self, v: serde_json::Value) -> Result<()> {
-        self.store.push(v);
-        Ok(())
-    }
-
-    pub fn retreive_seen_messages(&mut self) -> Result<Vec<serde_json::Value>> {
-        Ok(self.store.clone())
     }
 }

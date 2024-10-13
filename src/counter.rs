@@ -106,7 +106,7 @@ where
         Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.init(body.node_id, body.node_ids);
+            node.init(body.node_id, body.node_ids, cfg.store);
             let resp = init::Resp {
                 src: dest,
                 dest: src,
@@ -121,9 +121,13 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Add(AddPayload { src, dest, body }) => {
-            let old = cfg.store.get()?;
-            let new = old + body.delta;
-            cfg.store.set(new)?;
+            let &mut old: Vec<u8> = Vec::new();
+            node.store.read(old)?;
+
+            let old_u32 = old.from_be_bytes();
+            let new = old_u32 + body.delta;
+
+            cfg.store.write(new.to_be_bytes())?;
 
             let resp = AddResp {
                 src: dest,

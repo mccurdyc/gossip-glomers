@@ -179,6 +179,7 @@
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               doInstallCheck = true; # disable so that these can be built independently
               nativeInstallCheckInputs = maelstromDeps;
+              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               installCheckPhase = ''
                 echo "===> running 'maelstrom counter' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w g-counter --bin $out/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
