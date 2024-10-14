@@ -16,7 +16,7 @@ impl TimeSource for SystemTime {
 pub struct Config<'a, T: TimeSource, S: store::Store> {
     // This is where we set the TYPE of timesource
     pub time_source: &'a T,
-    pub store: &'a S,
+    pub store: &'a mut S,
 }
 
 impl<'a, T: TimeSource, S: store::Store> Config<'a, T, S> {

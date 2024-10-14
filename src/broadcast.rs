@@ -187,9 +187,9 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            info!("node in read: {:?}", node);
             let messages: Vec<u32> = node
-                .retreive_seen_messages()?
+                .store
+                .read()?
                 .iter()
                 .map(move |m| {
                     let b: BroadcastReqBody =
