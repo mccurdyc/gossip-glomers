@@ -1,4 +1,4 @@
-use crate::{config, init, node};
+use crate::{config, init, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -61,7 +61,7 @@ where
     R: Read,
     W: Write,
     T: config::TimeSource,
-    S: Read + Write,
+    S: store::Store,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
@@ -72,7 +72,7 @@ where
         Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.init(body.node_id, body.node_ids);
+            node.init(body.node_id, body.node_ids, cfg.store);
             let resp = init::Resp {
                 src: dest,
                 dest: src,

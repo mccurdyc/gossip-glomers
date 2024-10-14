@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use crate::store;
 
 pub trait TimeSource {
     fn now(&self) -> std::time::SystemTime;
@@ -13,14 +13,14 @@ impl TimeSource for SystemTime {
     }
 }
 
-pub struct Config<'a, T: TimeSource, S: Read + Write> {
+pub struct Config<'a, T: TimeSource, S: store::Store> {
     // This is where we set the TYPE of timesource
     pub time_source: &'a T,
-    pub store: S,
+    pub store: &'a S,
 }
 
-impl<'a, T: TimeSource, S: Read + Write> Config<'a, T, S> {
-    pub fn new(time_source: &'a T, s: S) -> Result<Self, anyhow::Error> {
+impl<'a, T: TimeSource, S: store::Store> Config<'a, T, S> {
+    pub fn new(time_source: &'a T, s: &'a S) -> Result<Self, anyhow::Error> {
         Ok(Config {
             time_source,
             store: s,

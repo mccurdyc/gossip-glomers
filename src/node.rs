@@ -1,9 +1,9 @@
-use crate::config;
+use crate::{config, store};
 use anyhow::Result;
 use std::io::{BufRead, Cursor, Read, Write};
 use tracing::{error, info};
 
-pub struct Node<S: Read + Write> {
+pub struct Node<S: store::Store> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
     #[allow(dead_code)]
@@ -12,8 +12,11 @@ pub struct Node<S: Read + Write> {
     pub store: S,
 }
 
-impl<S: Read + Write> Node<S> {
-    pub fn init(&mut self, node_id: String, node_ids: Vec<String>, s: S) -> Self {
+impl<S: store::Store> Node<S> {
+    pub fn init(&mut self, node_id: String, node_ids: Vec<String>, s: S) -> Self
+    where
+        S: store::Store + 'static,
+    {
         Self {
             id: node_id,
             node_ids,
@@ -32,6 +35,7 @@ impl<S: Read + Write> Node<S> {
         W: Write,
         T: config::TimeSource,
         F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T, S>) -> Result<()>,
+        S: store::Store,
         BR: BufRead,
     {
         // Initialize the default subscriber, which logs to stdout

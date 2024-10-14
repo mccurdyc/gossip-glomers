@@ -3,6 +3,45 @@ use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Write};
 use std::path::Path;
 
+// std::io::{Read,Write} Supertrait
+pub trait Store: std::io::Write + std::io::Read {}
+
+#[derive(Debug)]
+pub struct MemoryStore {
+    store: Vec<u8>,
+}
+
+impl MemoryStore {
+    pub fn new() -> MemoryStore {
+        Self { store: Vec::new() }
+    }
+}
+
+impl std::io::Write for MemoryStore {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
+        self.store = buf.to_owned();
+        Ok(buf.len())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> Result<(), Error> {
+        let _ = self.write(buf)?;
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
+        // Does nothing
+        Ok(())
+    }
+}
+
+impl std::io::Read for MemoryStore {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        let src = self.store.as_slice();
+        buf.copy_from_slice(src);
+        Ok(buf.len())
+    }
+}
+
 #[derive(Debug)]
 pub struct FileStore<'a> {
     file: File,
@@ -39,7 +78,7 @@ impl<'a> Write for FileStore<'a> {
 
     fn flush(&mut self) -> Result<(), Error> {
         self.file.lock_exclusive()?;
-        let s = self.file.flush()?;
+        self.file.flush()?;
         self.file.unlock()?;
         Ok(())
     }
@@ -48,8 +87,11 @@ impl<'a> Write for FileStore<'a> {
 impl<'a> Read for FileStore<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
-        let mut buf = Vec::new();
-        self.file.read_to_end(&mut buf)?;
+        let mut b = Vec::new();
+        self.file.read_to_end(&mut b)?;
+
+        let src = b.as_slice();
+        buf.copy_from_slice(src);
         self.file.unlock()?;
 
         Ok(buf.len())

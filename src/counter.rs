@@ -1,4 +1,4 @@
-use crate::{config, init, node};
+use crate::{config, init, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -96,7 +96,7 @@ where
     R: Read,
     W: Write,
     T: config::TimeSource,
-    S: Read + Write,
+    S: store::Store,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
@@ -122,13 +122,16 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Add(AddPayload { src, dest, body }) => {
-            let &mut old: Vec<u8> = Vec::new();
-            node.store.read(old)?;
+            let mut old: &mut [u8] = &mut [];
+            node.store.read(&mut old)?;
 
-            let old_u32 = old.from_be_bytes();
-            let new = old_u32 + body.delta;
-
-            cfg.store.write(new.to_be_bytes())?;
+            if let Ok(v) = old.try_into() {
+                let o = u32::from_ne_bytes(v);
+                let new = o + body.delta;
+                let b: [u8; 4] = new.to_ne_bytes();
+                let b_slice: &[u8] = &b;
+                cfg.store.write(b_slice)?;
+            }
 
             let resp = AddResp {
                 src: dest,
@@ -145,7 +148,11 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            let v = cfg.store.get()?;
+            let mut stored_val: &mut [u8] = &mut [];
+            node.store.read(&mut stored_val)?;
+
+            let v = stored_val.try_into()?;
+            let o = u32::from_ne_bytes(v);
 
             let resp = ReadResp {
                 src: dest,
@@ -153,7 +160,7 @@ where
                 body: ReadRespBody {
                     typ: "read_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    value: v,
+                    value: o,
                 },
             };
 

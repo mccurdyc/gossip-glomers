@@ -1,4 +1,4 @@
-use crate::{config, init, node};
+use crate::{config, init, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -136,13 +136,13 @@ pub fn listen<R, W, T, S>(
     node: &mut node::Node<S>,
     reader: R,
     writer: &mut W,
-    _cfg: &mut config::Config<T, S>,
+    cfg: &mut config::Config<T, S>,
 ) -> Result<()>
 where
     R: Read,
     W: Write,
     T: config::TimeSource,
-    S: Read + Write,
+    S: store::Store,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
@@ -153,7 +153,9 @@ where
         Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.init(body.node_id, body.node_ids);
+            let s = Box::new(store::MemoryStore::new());
+
+            node.init(body.node_id, body.node_ids, cfg.store);
             let resp = init::Resp {
                 src: dest,
                 dest: src,
@@ -168,8 +170,7 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Broadcast(BroadcastPayload { src, dest, body }) => {
-            node.store(serde_json::to_value(&body)?)?;
-            info!("node: {:?}", node);
+            serde_json::ser::to_writer(node.store, &body)?;
 
             let resp = BroadcastResp {
                 src: dest,
