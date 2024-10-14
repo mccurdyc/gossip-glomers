@@ -47,17 +47,17 @@ enum Message {
     Echo(Payload),
 }
 
-pub fn listen<R, W, T, S>(
-    node: &mut node::Node<S>,
+pub fn listen<'a, R, W, T, S>(
+    node: &'a mut node::Node<'a, S>,
     reader: R,
     writer: &mut W,
-    cfg: &mut config::Config<T, S>,
+    cfg: &'a mut config::Config<T, S>,
 ) -> Result<()>
 where
     R: Read,
     W: Write,
     T: config::TimeSource,
-    S: store::Store,
+    S: store::Store + 'static,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object

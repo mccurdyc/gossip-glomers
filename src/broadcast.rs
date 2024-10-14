@@ -132,17 +132,17 @@ enum Message {
     Other(HashMap<String, serde_json::Value>),
 }
 
-pub fn listen<R, W, T, S>(
-    node: &mut node::Node<S>,
+pub fn listen<'a, R, W, T, S>(
+    node: &'a mut node::Node<'a, S>,
     reader: R,
     writer: &mut W,
-    cfg: &mut config::Config<T, S>,
+    cfg: &'a mut config::Config<T, S>,
 ) -> Result<()>
 where
     R: Read,
     W: Write,
     T: config::TimeSource,
-    S: store::Store,
+    S: store::Store + 'static,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
@@ -151,10 +151,6 @@ where
     match msg {
         // Node didn't respond to init message
         Message::Init(init::Payload { src, dest, body }) => {
-            // If the message is an Init message, we need to actually configure
-            // the node object above.
-            let s = Box::new(store::MemoryStore::new());
-
             node.init(body.node_id, body.node_ids, cfg.store);
             let resp = init::Resp {
                 src: dest,
@@ -170,7 +166,11 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Broadcast(BroadcastPayload { src, dest, body }) => {
-            serde_json::ser::to_writer(node.store, &body)?;
+            let messages: &mut [u8] = &mut [];
+            node.store.read(messages)?;
+
+            let joined = [messages, &mut serde_json::to_vec(&body)?].concat();
+            serde_json::ser::to_writer(&mut node.store, &joined)?;
 
             let resp = BroadcastResp {
                 src: dest,
@@ -187,16 +187,11 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            let messages: Vec<u32> = node
-                .store
-                .read()?
-                .iter()
-                .map(move |m| {
-                    let b: BroadcastReqBody =
-                        serde_json::from_value(m.clone()).expect("failed to parse stored message");
-                    b.message
-                })
-                .collect();
+            let messages: &mut [u8] = &mut [];
+            node.store.read(messages)?;
+
+            let v = serde_json::from_slice(messages)?;
+
             info!("messages: {:?}", messages);
             let resp = ReadResp {
                 src: dest,
@@ -204,7 +199,7 @@ where
                 body: ReadRespBody {
                     typ: "read_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    messages,
+                    messages: v,
                 },
             };
             let mut resp_str = serde_json::to_string(&resp)?;

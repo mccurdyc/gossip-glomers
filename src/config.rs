@@ -20,7 +20,7 @@ pub struct Config<'a, T: TimeSource, S: store::Store> {
 }
 
 impl<'a, T: TimeSource, S: store::Store> Config<'a, T, S> {
-    pub fn new(time_source: &'a T, s: &'a S) -> Result<Self, anyhow::Error> {
+    pub fn new(time_source: &'a T, s: &'a mut S) -> Result<Self, anyhow::Error> {
         Ok(Config {
             time_source,
             store: s,
