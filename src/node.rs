@@ -33,7 +33,7 @@ impl<'a, S: store::Store> Node<'a, S> {
     }
 
     pub fn run<F, BR, W, T>(
-        mut self,
+        &'static mut self,
         listen: F,
         reader: BR,
         writer: &mut W,
@@ -42,7 +42,7 @@ impl<'a, S: store::Store> Node<'a, S> {
     where
         W: Write,
         T: config::TimeSource,
-        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
+        F: Fn(&'static mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
         S: store::Store,
         BR: BufRead,
     {
