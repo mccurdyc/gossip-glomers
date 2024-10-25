@@ -17,7 +17,8 @@ impl MemoryStore {
     }
 }
 
-impl std::io::Write for MemoryStore {
+impl Store for MemoryStore {}
+impl Write for MemoryStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.store = buf.to_owned();
         Ok(buf.len())
@@ -34,7 +35,7 @@ impl std::io::Write for MemoryStore {
     }
 }
 
-impl std::io::Read for MemoryStore {
+impl Read for MemoryStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         let src = self.store.as_slice();
         buf.copy_from_slice(src);
@@ -48,6 +49,7 @@ pub struct FileStore<'a> {
     path: &'a Path,
 }
 
+impl<'a> Store for FileStore<'a> {}
 impl<'a> FileStore<'a> {
     pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
         let f = OpenOptions::new()

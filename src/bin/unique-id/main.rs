@@ -6,14 +6,14 @@ use std::io;
 use std::path::Path;
 
 fn main() {
-    let node: node::Node = Default::default();
+    let mut s = store::MemoeryStore::new().expect("failed to create store");
+    let node = node::Node::new(&mut s);
 
     node.run(
         unique::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
-        &mut config::Config::<SystemTime>::new(&SystemTime {}, &Path::new("empty"))
-            .expect("failed to create config"),
+        &mut config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to create config"),
     )
     .expect("failed to start");
 }

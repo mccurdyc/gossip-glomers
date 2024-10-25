@@ -7,18 +7,14 @@ use std::io;
 use std::path::Path;
 
 fn main() {
-    let node: node::Node = Default::default();
-
-    // store should be created here and injected
-    let mut s = store::FileStore
-        .new(Path("./data.txt"))
-        .expect("failed to create store");
+    let mut s = store::FileStore::new(&Path::new("./data.txt")).expect("failed to create store");
+    let node = node::Node::new(&mut s);
 
     node.run(
         counter::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
-        &mut config::Config::<SystemTime>::new(&SystemTime {}, s).expect("failed to get config"),
+        &mut config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to get config"),
     )
     .expect("failed to start");
 }

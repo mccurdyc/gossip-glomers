@@ -13,15 +13,23 @@ pub struct Node<'a, S: store::Store> {
 }
 
 impl<'a, S: store::Store> Node<'a, S> {
-    pub fn init(&mut self, node_id: String, node_ids: Vec<String>, s: &'a mut S) -> Self
+    pub fn new(s: &'a mut S) -> Self
     where
         S: store::Store + 'static,
     {
         Self {
-            id: node_id,
-            node_ids,
+            id: std::default::Default::default(),
+            node_ids: std::default::Default::default(),
             store: s,
         }
+    }
+
+    pub fn init(&mut self, node_id: String, node_ids: Vec<String>)
+    where
+        S: store::Store + 'static,
+    {
+        self.id = node_id;
+        self.node_ids = node_ids;
     }
 
     pub fn run<F, BR, W, T>(
