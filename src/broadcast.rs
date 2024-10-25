@@ -151,7 +151,7 @@ where
     match msg {
         // Node didn't respond to init message
         Message::Init(init::Payload { src, dest, body }) => {
-            node.init(body.node_id, body.node_ids, cfg.store);
+            node.init(body.node_id, body.node_ids);
             let resp = init::Resp {
                 src: dest,
                 dest: src,

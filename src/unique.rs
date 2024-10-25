@@ -72,7 +72,7 @@ where
         Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.init(body.node_id, body.node_ids, cfg.store);
+            node.init(body.node_id, body.node_ids);
             let resp = init::Resp {
                 src: dest,
                 dest: src,
