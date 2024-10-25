@@ -3,17 +3,17 @@ use anyhow::Result;
 use std::io::{BufRead, Cursor, Read, Write};
 use tracing::{error, info};
 
-pub struct Node<'a, S: store::Store> {
+pub struct Node<S: store::Store + 'static> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
     #[allow(dead_code)]
     node_ids: Vec<String>,
 
-    pub store: &'a mut S,
+    pub store: &'static mut S,
 }
 
-impl<'a, S: store::Store> Node<'a, S> {
-    pub fn new(s: &'a mut S) -> Self
+impl<S: store::Store> Node<S> {
+    pub fn new(s: &'static mut S) -> Self
     where
         S: store::Store + 'static,
     {

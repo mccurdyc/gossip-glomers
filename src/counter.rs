@@ -87,10 +87,10 @@ enum Message {
 }
 
 pub fn listen<'a, R, W, T, S>(
-    node: &'a mut node::Node<'a, S>,
+    node: &'static mut node::Node<S>,
     reader: R,
     writer: &mut W,
-    cfg: &'a mut config::Config<T>,
+    _cfg: &'a mut config::Config<T>,
 ) -> Result<()>
 where
     R: Read,
@@ -130,7 +130,7 @@ where
                 let new = o + body.delta;
                 let b: [u8; 4] = new.to_ne_bytes();
                 let b_slice: &[u8] = &b;
-                cfg.store.write(b_slice)?;
+                node.store.write(b_slice)?;
             }
 
             let resp = AddResp {

@@ -52,7 +52,7 @@ enum Message {
 }
 
 pub fn listen<'a, R, W, T, S>(
-    node: &'a mut node::Node<'a, S>,
+    node: &'static mut node::Node<S>,
     reader: R,
     writer: &mut W,
     cfg: &'a mut config::Config<T>,
