@@ -90,7 +90,7 @@ pub fn listen<'a, R, W, T, S>(
     node: &'a mut node::Node<'a, S>,
     reader: R,
     writer: &mut W,
-    cfg: &'a mut config::Config<T, S>,
+    cfg: &'a mut config::Config<T>,
 ) -> Result<()>
 where
     R: Read,

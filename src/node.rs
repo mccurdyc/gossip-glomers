@@ -37,12 +37,12 @@ impl<'a, S: store::Store> Node<'a, S> {
         listen: F,
         reader: BR,
         writer: &mut W,
-        cfg: &mut config::Config<T, S>,
+        cfg: &mut config::Config<T>,
     ) -> Result<()>
     where
         W: Write,
         T: config::TimeSource,
-        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T, S>) -> Result<()>,
+        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
         S: store::Store,
         BR: BufRead,
     {
