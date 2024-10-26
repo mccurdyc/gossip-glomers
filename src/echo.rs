@@ -48,7 +48,7 @@ enum Message {
 }
 
 pub fn listen<'a, R, W, T, S>(
-    node: &'static mut node::Node<S>,
+    node: &'a mut node::Node<S>,
     reader: R,
     writer: &mut W,
     _cfg: &'a mut config::Config<T>,
@@ -57,7 +57,7 @@ where
     R: Read,
     W: Write,
     T: config::TimeSource,
-    S: store::Store + 'static,
+    S: store::Store,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object

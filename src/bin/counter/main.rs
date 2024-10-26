@@ -7,14 +7,19 @@ use std::io;
 use std::path::Path;
 
 fn main() {
-    let mut s = store::FileStore::new(&Path::new("./data.txt")).expect("failed to create store");
+    let mut s: &'static store::FileStore =
+        &store::FileStore::new(&Path::new("./data.txt")).expect("failed to create store");
+
+    let mut cfg: &'static config::Config<SystemTime> =
+        &config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to get config");
+
     let node = node::Node::new(&mut s);
 
     node.run(
         counter::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
-        &mut config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to get config"),
+        cfg,
     )
     .expect("failed to start");
 }

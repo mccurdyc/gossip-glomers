@@ -3,19 +3,19 @@ use anyhow::Result;
 use std::io::{BufRead, Cursor, Read, Write};
 use tracing::{error, info};
 
-pub struct Node<'a, S: store::Store> {
+pub struct Node<S: store::Store + 'static> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
     #[allow(dead_code)]
     node_ids: Vec<String>,
 
-    pub store: &'a mut S,
+    pub store: &'static mut S,
 }
 
-impl<'a, S: store::Store> Node<'a, S> {
-    pub fn new(s: &'a mut S) -> Self
+impl<S: store::Store + 'static> Node<S> {
+    pub fn new(s: &'static mut S) -> Self
     where
-        S: store::Store + 'static,
+        S: store::Store,
     {
         Self {
             id: std::default::Default::default(),
@@ -26,23 +26,23 @@ impl<'a, S: store::Store> Node<'a, S> {
 
     pub fn init(&mut self, node_id: String, node_ids: Vec<String>)
     where
-        S: store::Store + 'static,
+        S: store::Store,
     {
         self.id = node_id;
         self.node_ids = node_ids;
     }
 
     pub fn run<F, BR, W, T>(
-        &'static mut self,
+        mut self, // take ownership
         listen: F,
         reader: BR,
         writer: &mut W,
-        cfg: &mut config::Config<T>,
+        cfg: &'static mut config::Config<T>,
     ) -> Result<()>
     where
         W: Write,
         T: config::TimeSource,
-        F: Fn(&'static mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
+        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
         S: store::Store,
         BR: BufRead,
     {

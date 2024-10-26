@@ -4,7 +4,7 @@ use std::io::{Error, Read, Write};
 use std::path::Path;
 
 // std::io::{Read,Write} Supertrait
-pub trait Store: std::io::Write + std::io::Read {}
+pub trait Store: std::io::Write + std::io::Read + 'static {}
 
 #[derive(Debug)]
 pub struct MemoryStore {
@@ -44,14 +44,14 @@ impl Read for MemoryStore {
 }
 
 #[derive(Debug)]
-pub struct FileStore<'a> {
+pub struct FileStore {
     file: File,
-    path: &'a Path,
+    path: &'static Path,
 }
 
-impl<'a> Store for FileStore<'a> {}
-impl<'a> FileStore<'a> {
-    pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
+impl Store for FileStore {}
+impl FileStore {
+    pub fn new(path: &'static Path) -> Result<Self, std::io::Error> {
         let f = OpenOptions::new()
             .create(true)
             .read(true)
@@ -61,7 +61,7 @@ impl<'a> FileStore<'a> {
     }
 }
 
-impl<'a> Write for FileStore<'a> {
+impl Write for FileStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let s = self.file.write(buf)?;
@@ -86,7 +86,7 @@ impl<'a> Write for FileStore<'a> {
     }
 }
 
-impl<'a> Read for FileStore<'a> {
+impl Read for FileStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let mut b = Vec::new();
