@@ -13,13 +13,13 @@ fn main() {
     let mut cfg: &'static config::Config<SystemTime> =
         &config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to get config");
 
-    let node = node::Node::new(&mut s);
+    let mut node: node::Node<store::FileStore> = node::Node::new(&mut s);
 
     node.run(
         counter::listen,
         io::stdin().lock(),
         &mut io::stdout().lock(),
-        cfg,
+        &mut cfg,
     )
     .expect("failed to start");
 }

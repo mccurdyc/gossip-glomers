@@ -24,7 +24,7 @@ impl<S: store::Store + 'static> Node<S> {
         }
     }
 
-    pub fn init(&mut self, node_id: String, node_ids: Vec<String>)
+    pub fn init(&'static mut self, node_id: String, node_ids: Vec<String>)
     where
         S: store::Store,
     {
@@ -33,7 +33,7 @@ impl<S: store::Store + 'static> Node<S> {
     }
 
     pub fn run<F, BR, W, T>(
-        mut self, // take ownership
+        &'static mut self, // take ownership
         listen: F,
         reader: BR,
         writer: &mut W,
@@ -58,7 +58,7 @@ impl<S: store::Store + 'static> Node<S> {
             if let Ok(l) = line {
                 info!("line: {:?}", l);
                 let buf: Box<dyn Read> = Box::new(Cursor::new(l));
-                let _ = match listen(&mut self, buf, writer, cfg) {
+                let _ = match listen(self, buf, writer, cfg) {
                     Ok(_) => {}
                     Err(e) => {
                         error!("error listening: {:?}", e);

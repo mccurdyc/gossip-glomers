@@ -44,14 +44,14 @@ impl Read for MemoryStore {
 }
 
 #[derive(Debug)]
-pub struct FileStore {
+pub struct FileStore<'a> {
     file: File,
-    path: &'static Path,
+    path: &'a Path,
 }
 
-impl Store for FileStore {}
-impl FileStore {
-    pub fn new(path: &'static Path) -> Result<Self, std::io::Error> {
+impl<'a: 'static> Store for FileStore<'a> {}
+impl<'a: 'static> FileStore<'a> {
+    pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
         let f = OpenOptions::new()
             .create(true)
             .read(true)
@@ -61,7 +61,7 @@ impl FileStore {
     }
 }
 
-impl Write for FileStore {
+impl<'a: 'static> Write for FileStore<'a> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let s = self.file.write(buf)?;
@@ -86,7 +86,7 @@ impl Write for FileStore {
     }
 }
 
-impl Read for FileStore {
+impl<'a: 'static> Read for FileStore<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let mut b = Vec::new();

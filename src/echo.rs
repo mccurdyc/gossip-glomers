@@ -47,7 +47,7 @@ enum Message {
     Echo(Payload),
 }
 
-pub fn listen<'a, R, W, T, S>(
+pub fn listen<'a: 'static, R, W, T, S>(
     node: &'a mut node::Node<S>,
     reader: R,
     writer: &mut W,
