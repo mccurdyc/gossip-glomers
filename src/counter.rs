@@ -1,8 +1,8 @@
-use crate::{config, init, node, store};
+use crate::{config, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{BufRead, Write};
 use tracing::info;
 
 // Goals(s):
@@ -80,20 +80,19 @@ struct ReadRespBody {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Message {
-    Init(init::Payload),
     Add(AddPayload),
     Read(ReadPayload),
     Other(HashMap<String, serde_json::Value>),
 }
 
-pub fn listen<'a: 'static, R, W, T, S>(
-    node: &'a mut node::Node<S>,
+pub fn listen<R, W, T, S>(
+    node: &mut node::Node<S>,
     reader: R,
     writer: &mut W,
-    _cfg: &'a mut config::Config<T>,
+    _cfg: &config::Config<T>,
 ) -> Result<()>
 where
-    R: Read,
+    R: BufRead,
     W: Write,
     T: config::TimeSource,
     S: store::Store,
@@ -103,24 +102,6 @@ where
     let msg: Message = serde_json::from_reader(reader)?;
     info!(">> input: {:?}", msg);
     match msg {
-        // Node didn't respond to init message
-        Message::Init(init::Payload { src, dest, body }) => {
-            // If the message is an Init message, we need to actually configure
-            // the node object above.
-            node.init(body.node_id, body.node_ids);
-            let resp = init::Resp {
-                src: dest,
-                dest: src,
-                body: init::RespBody {
-                    typ: "init_ok".to_string(),
-                    in_reply_to: body.msg_id,
-                },
-            };
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
-        }
         Message::Add(AddPayload { src, dest, body }) => {
             let mut old: &mut [u8] = &mut [];
             node.store.read(&mut old)?;

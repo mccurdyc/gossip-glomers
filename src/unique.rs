@@ -51,17 +51,17 @@ enum Message {
                                                // to deserialize as Other(Payload).
 }
 
-pub fn listen<'a: 'static, R, W, T, S>(
-    node: &'a mut node::Node<S>,
+pub fn listen<R, W, T, S>(
+    n: &mut node::Node<S>,
     reader: R,
     writer: &mut W,
-    cfg: &'a mut config::Config<T>,
+    cfg: &mut config::Config<T>,
 ) -> Result<()>
 where
     R: Read,
     W: Write,
-    T: config::TimeSource,
     S: store::Store,
+    T: config::TimeSource,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
@@ -72,7 +72,7 @@ where
         Message::Init(init::Payload { src, dest, body }) => {
             // If the message is an Init message, we need to actually configure
             // the node object above.
-            node.init(body.node_id, body.node_ids);
+            n.init(body.node_id, body.node_ids);
             let resp = init::Resp {
                 src: dest,
                 dest: src,

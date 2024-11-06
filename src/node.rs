@@ -1,19 +1,27 @@
-use crate::{config, store};
+use crate::{config, init, node, store};
 use anyhow::Result;
-use std::io::{BufRead, Cursor, Read, Write};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::io::{BufRead, Cursor, Write};
 use tracing::{error, info};
 
-pub struct Node<S: store::Store + 'static> {
+pub struct Node<S: store::Store> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
     #[allow(dead_code)]
     node_ids: Vec<String>,
 
-    pub store: &'static mut S,
+    pub store: S,
 }
 
-impl<S: store::Store + 'static> Node<S> {
-    pub fn new(s: &'static mut S) -> Self
+#[derive(Debug, Serialize, Deserialize)]
+enum Message {
+    Init(init::Payload),
+    Other(HashMap<String, serde_json::Value>),
+}
+
+impl<S: store::Store> Node<S> {
+    pub fn new(s: S) -> Self
     where
         S: store::Store,
     {
@@ -24,7 +32,7 @@ impl<S: store::Store + 'static> Node<S> {
         }
     }
 
-    pub fn init(&'static mut self, node_id: String, node_ids: Vec<String>)
+    pub fn init(&mut self, node_id: String, node_ids: Vec<String>)
     where
         S: store::Store,
     {
@@ -32,19 +40,19 @@ impl<S: store::Store + 'static> Node<S> {
         self.node_ids = node_ids;
     }
 
-    pub fn run<F, BR, W, T>(
-        &'static mut self, // take ownership
-        listen: F,
-        reader: BR,
-        writer: &mut W,
-        cfg: &'static mut config::Config<T>,
+    pub fn run<R, W, F, T>(
+        &mut self,
+        reader: R,
+        mut writer: W,
+        f: F,
+        cfg: config::Config<T>,
     ) -> Result<()>
     where
+        R: BufRead,
         W: Write,
+        F: Fn(&mut node::Node<S>, Box<dyn BufRead>, &mut W, &config::Config<T>) -> Result<()>,
         T: config::TimeSource,
-        F: Fn(&mut Self, Box<dyn Read>, &mut W, &mut config::Config<T>) -> Result<()>,
         S: store::Store,
-        BR: BufRead,
     {
         // Initialize the default subscriber, which logs to stdout
         tracing_subscriber::fmt()
@@ -57,18 +65,45 @@ impl<S: store::Store + 'static> Node<S> {
         for line in reader.lines() {
             if let Ok(l) = line {
                 info!("line: {:?}", l);
-                let buf: Box<dyn Read> = Box::new(Cursor::new(l));
-                let _ = match listen(self, buf, writer, cfg) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("error listening: {:?}", e);
+
+                // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
+                // from_reader will read to end of deserialized object
+                let msg: Message = serde_json::from_str(&l)?;
+                info!(">> input: {:?}", msg);
+
+                match msg {
+                    // Node didn't respond to init message
+                    Message::Init(init::Payload { src, dest, body }) => {
+                        // If the message is an Init message, we need to actually configure
+                        // the node object above.
+                        self.init(body.node_id, body.node_ids);
+                        let resp = init::Resp {
+                            src: dest,
+                            dest: src,
+                            body: init::RespBody {
+                                typ: "init_ok".to_string(),
+                                in_reply_to: body.msg_id,
+                            },
+                        };
+                        let mut resp_str = serde_json::to_string(&resp)?;
+                        resp_str.push('\n');
+                        info!("<< output: {:?}", &resp_str);
+                        writer.write_all(resp_str.as_bytes())?;
                     }
-                };
+                    Message::Other(_) => {
+                        let buf = Box::new(Cursor::new(l));
+                        let _ = match f(self, buf, &mut writer, &cfg) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("error listening: {:?}", e);
+                            }
+                        };
+                    }
+                }
             } else {
                 error!("error reading line: {:?}", line);
             }
         }
-
         Ok(())
     }
 }
