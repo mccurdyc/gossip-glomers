@@ -4,7 +4,7 @@ use std::io::{Error, Read, Write};
 use std::path::Path;
 
 // std::io::{Read,Write} Supertrait
-pub trait Store: std::io::Write + std::io::Read + 'static {}
+pub trait Store: std::io::Write + std::io::Read {}
 
 #[derive(Debug)]
 pub struct MemoryStore {
@@ -12,8 +12,8 @@ pub struct MemoryStore {
 }
 
 impl MemoryStore {
-    pub fn new() -> MemoryStore {
-        Self { store: Vec::new() }
+    pub fn new() -> Result<Self, std::io::Error> {
+        Ok(Self { store: Vec::new() })
     }
 }
 
@@ -43,10 +43,9 @@ impl Read for MemoryStore {
     }
 }
 
-#[derive(Debug)]
 pub struct FileStore<'a> {
     file: File,
-    path: &'a Path,
+    _path: &'a Path,
 }
 
 impl<'a: 'static> Store for FileStore<'a> {}
@@ -57,7 +56,10 @@ impl<'a: 'static> FileStore<'a> {
             .read(true)
             .write(true)
             .open(path)?;
-        Ok(FileStore { file: f, path })
+        Ok(FileStore {
+            file: f,
+            _path: path,
+        })
     }
 }
 

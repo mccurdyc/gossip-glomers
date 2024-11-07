@@ -1,19 +1,17 @@
-use app::broadcast;
-use app::config;
-use app::config::SystemTime;
-use app::node;
+use app::{broadcast, config, node, store};
 use std::io;
-use std::path::Path;
 
 fn main() {
-    let mut s = store::MemoeryStore::new().expect("failed to create store");
-    let node = node::Node::new(&mut s);
+    let s = store::MemoryStore::new().expect("failed to create store");
+    let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+        .expect("failed to get config");
+    let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
-    node.run(
-        broadcast::listen,
+    n.run(
         io::stdin().lock(),
-        &mut io::stdout().lock(),
-        &mut config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to create config"),
+        io::stdout().lock(),
+        broadcast::listen,
+        cfg,
     )
     .expect("failed to start");
 }

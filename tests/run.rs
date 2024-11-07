@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use app::config::{Config, SystemTime};
-    use app::{broadcast, counter, echo, node, unique};
+    use app::{broadcast, config, counter, echo, node, store, unique};
     use once_cell::sync::Lazy;
     use std::io::{Cursor, Write};
     use std::vec::Vec;
@@ -65,7 +64,10 @@ mod tests {
             ),
         ];
 
-        let mut node: node::Node = Default::default();
+        let s = store::MemoryStore::new().expect("failed to create store");
+        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+            .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -73,14 +75,7 @@ mod tests {
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
 
-            echo::listen(
-                &mut node,
-                read_cursor,
-                &mut write_cursor,
-                &mut Config::<SystemTime>::new(&SystemTime {}, f.path())
-                    .expect("failed to create config"),
-            )
-            .expect("listen failed");
+            echo::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
@@ -111,7 +106,10 @@ mod tests {
             ),
         ];
 
-        let mut node: node::Node = Default::default();
+        let s = store::MemoryStore::new().expect("failed to create store");
+        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+            .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -119,14 +117,7 @@ mod tests {
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
 
-            unique::listen(
-                &mut node,
-                read_cursor,
-                &mut write_cursor,
-                &mut Config::<MockTime>::new(&MockTime {}, f.path())
-                    .expect("failed to create config"),
-            )
-            .expect("listen failed");
+            unique::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
@@ -170,7 +161,10 @@ mod tests {
             ),
         ];
 
-        let mut node: node::Node = Default::default();
+        let s = store::MemoryStore::new().expect("failed to create store");
+        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+            .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -178,14 +172,7 @@ mod tests {
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
 
-            broadcast::listen(
-                &mut node,
-                read_cursor,
-                &mut write_cursor,
-                &mut Config::<SystemTime>::new(&SystemTime {}, f.path())
-                    .expect("failed to create config"),
-            )
-            .expect("listen failed");
+            broadcast::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
@@ -211,7 +198,10 @@ mod tests {
             ),
         ];
 
-        let mut node: node::Node = Default::default();
+        let s = store::MemoryStore::new().expect("failed to create store");
+        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+            .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
         for (starting_value, input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -221,14 +211,7 @@ mod tests {
 
             let f = setup(starting_value);
 
-            counter::listen(
-                &mut node,
-                read_cursor,
-                &mut write_cursor,
-                &mut Config::<SystemTime>::new(&SystemTime {}, f.path())
-                    .expect("failed to create config"),
-            )
-            .expect("listen failed");
+            counter::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
 

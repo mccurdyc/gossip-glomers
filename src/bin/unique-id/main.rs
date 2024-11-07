@@ -1,18 +1,12 @@
-use app::config;
-use app::config::SystemTime;
-use app::node;
-use app::unique;
+use app::{config, node, store, unique};
 use std::io;
 
 fn main() {
-    let mut s = store::MemoeryStore::new().expect("failed to create store");
-    let node = node::Node::new(&mut s);
+    let s = store::MemoryStore::new().expect("failed to create store");
+    let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+        .expect("failed to get config");
+    let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
-    node.run(
-        io::stdin().lock(),
-        &mut io::stdout().lock(),
-        unique::listen,
-        &mut config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to create config"),
-    )
-    .expect("failed to start");
+    n.run(io::stdin().lock(), io::stdout().lock(), unique::listen, cfg)
+        .expect("failed to start");
 }
