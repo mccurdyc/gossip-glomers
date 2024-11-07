@@ -107,8 +107,7 @@ mod tests {
         ];
 
         let s = store::MemoryStore::new().expect("failed to create store");
-        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
-            .expect("failed to get config");
+        let cfg = config::Config::<MockTime>::new(&MockTime {}).expect("failed to get config");
         let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
         for (input, expected) in test_cases {
