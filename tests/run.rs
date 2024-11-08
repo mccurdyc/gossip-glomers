@@ -45,12 +45,6 @@ mod tests {
 
         let test_cases = vec![
             (
-                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
-"#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
-"#,
-            ),
-            (
                 r#"{"src":"c1","dest":"n1","body":{"type":"echo","msg_id":1,"echo":"Please echo 35"}}
 "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","msg_id":1,"in_reply_to":1,"echo":"Please echo 35"}}
@@ -87,12 +81,6 @@ mod tests {
         let f = setup(0);
         let test_cases = vec![
             (
-                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
-"#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
-"#,
-            ),
-            (
                 r#"{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
 "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"generate_ok","msg_id":1,"in_reply_to":1,"id":"979f89fa9ea19c49f86ff60ea893db2d66df54d8bba01bd024ca2b837d731c6a"}}
@@ -128,12 +116,6 @@ mod tests {
         let f = setup(0);
 
         let test_cases = vec![
-            (
-                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
-"#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
-"#,
-            ),
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 1000}}
 "#,
@@ -180,22 +162,13 @@ mod tests {
 
     #[test]
     fn counter() {
-        let test_cases = vec![
-            (
-                0,
-                r#"{"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1", "n2", "n3"]}}
+        let test_cases = vec![(
+            0,
+            r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
 "#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+            r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":0}}
 "#,
-            ),
-            (
-                0,
-                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
-"#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":0}}
-"#,
-            ),
-        ];
+        )];
 
         let s = store::MemoryStore::new().expect("failed to create store");
         let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
