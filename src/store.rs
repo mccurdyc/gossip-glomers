@@ -8,19 +8,23 @@ pub trait Store: std::io::Write + std::io::Read {}
 
 #[derive(Debug)]
 pub struct MemoryStore {
-    store: Vec<u8>,
+    data: Vec<u8>,
+    position: usize,
 }
 
 impl MemoryStore {
     pub fn new() -> Result<Self, std::io::Error> {
-        Ok(Self { store: Vec::new() })
+        Ok(Self {
+            data: Vec::new(),
+            position: 0,
+        })
     }
 }
 
 impl Store for MemoryStore {}
 impl Write for MemoryStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        self.store = buf.to_owned();
+        self.data = buf.to_owned();
         Ok(buf.len())
     }
 
@@ -37,9 +41,16 @@ impl Write for MemoryStore {
 
 impl Read for MemoryStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let src = self.store.as_slice();
-        buf.copy_from_slice(src);
-        Ok(buf.len())
+        let remaining = self.data.len() - self.position;
+        let to_read = remaining.min(buf.len());
+
+        if to_read == 0 {
+            return Ok(0); // EOF
+        }
+
+        buf[..to_read].copy_from_slice(&self.data[self.position..self.position + to_read]);
+        self.position += to_read;
+        Ok(to_read)
     }
 }
 
