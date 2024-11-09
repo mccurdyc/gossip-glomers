@@ -5,8 +5,9 @@
 log := "warn"
 export JUST_LOG := log
 
-test:
-    cargo test -- --nocapture
+# Variadic argument - https://just.systems/man/en/recipe-parameters.html
+test *TEST:
+    cargo test {{ TEST }} -- --nocapture
 
 lint:
     cargo clippy
