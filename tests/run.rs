@@ -5,6 +5,7 @@ mod tests {
     use std::io::{Cursor, Write};
     use std::vec::Vec;
     use tempfile::NamedTempFile;
+    use tracing::info;
 
     struct MockTime;
     impl app::config::TimeSource for MockTime {
@@ -113,24 +114,28 @@ mod tests {
 
         let test_cases = vec![
             (
+                "one",
                 r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 1000}}
 "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":1}}
 "#,
             ),
             (
+                "two",
                 r#"{"src":"f11","dest":"z10","body":{"type":"broadcast","msg_id":99, "message": 42}}
 "#,
                 r#"{"src":"z10","dest":"f11","body":{"type":"broadcast_ok","in_reply_to":99}}
 "#,
             ),
             (
+                "three",
                 r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
 "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1000,42]}}
 "#,
             ),
             (
+                "four",
                 r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":101,"topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
 "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":101}}
@@ -143,7 +148,9 @@ mod tests {
             .expect("failed to get config");
         let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
-        for (input, expected) in test_cases {
+        for (name, input, expected) in test_cases {
+            info!("TEST: {:?}", name);
+
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
             let mut write_cursor = Cursor::new(&mut vec);
