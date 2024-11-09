@@ -21,27 +21,14 @@ mod tests {
             .init();
     });
 
-    fn setup(starting_value: u32) -> NamedTempFile {
-        // The first time `initialize` is invoked the code in `TRACING` is executed.
-        // All other invocations will instead skip execution.
-        Lazy::force(&TRACING);
-
-        let mut f = NamedTempFile::new().expect("Failed to create test tempfile");
-        let buf = u32::to_be_bytes(starting_value);
-        f.write_all(&buf)
-            .expect("Failed to writing starting value to file");
-        f
-    }
-
-    fn cleanup(f: NamedTempFile) {
-        f.into_temp_path()
-            .close() // closes and removes
-            .expect("Failed to cleanup test tempfile")
-    }
-
     #[test]
     fn echo() {
-        let f = setup(0);
+        // setup closure
+        (|| {
+            // The first time `initialize` is invoked the code in `TRACING` is executed.
+            // All other invocations will instead skip execution.
+            Lazy::force(&TRACING);
+        })();
 
         let test_cases = vec![
             (
@@ -73,12 +60,17 @@ mod tests {
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
-        cleanup(f);
     }
 
     #[test]
     fn unique() {
-        let f = setup(0);
+        // setup closure
+        (|| {
+            // The first time `initialize` is invoked the code in `TRACING` is executed.
+            // All other invocations will instead skip execution.
+            Lazy::force(&TRACING);
+        })();
+
         let test_cases = vec![
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
@@ -108,12 +100,16 @@ mod tests {
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
-        cleanup(f);
     }
 
     #[test]
     fn broadcast() {
-        let f = setup(0);
+        // setup closure
+        (|| {
+            // The first time `initialize` is invoked the code in `TRACING` is executed.
+            // All other invocations will instead skip execution.
+            Lazy::force(&TRACING);
+        })();
 
         let test_cases = vec![
             (
@@ -157,11 +153,24 @@ mod tests {
 
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
         }
-        cleanup(f);
     }
 
     #[test]
     fn counter() {
+        let setup = |starting_value: u32| {
+            let mut f = NamedTempFile::new().expect("Failed to create test tempfile");
+            let buf = u32::to_be_bytes(starting_value);
+            f.write_all(&buf)
+                .expect("Failed to writing starting value to file");
+            f
+        };
+
+        let cleanup = |f: NamedTempFile| {
+            f.into_temp_path()
+                .close() // closes and removes
+                .expect("Failed to cleanup test tempfile")
+        };
+
         let test_cases = vec![(
             0,
             r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
