@@ -169,22 +169,15 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            let message_ids: &mut [u8] = &mut [];
             let mut v: Vec<u32> = Vec::new();
+            let mut interim: Vec<u8> = Vec::new();
 
-            if let Ok(s) = node.store.read(message_ids) {
-                match s {
-                    0 => {}
-                    _ => {
-                        for chunk in message_ids.chunks(4) {
-                            let x = u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                            v.push(x);
-                        }
-                    }
+            if let Ok(_) = node.store.read_to_end(&mut interim) {
+                for x in interim.iter() {
+                    v.push(*x as u32);
                 }
-            };
+            }
 
-            info!("messages: {:?}", message_ids);
             let resp = ReadResp {
                 src: dest,
                 dest: src,

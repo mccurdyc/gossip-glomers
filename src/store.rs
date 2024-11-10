@@ -41,16 +41,21 @@ impl Write for MemoryStore {
 
 impl Read for MemoryStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let remaining = self.data.len() - self.position;
-        let to_read = remaining.min(buf.len());
+        // Calculate how many bytes can be read
+        let bytes_to_read = std::cmp::min(buf.len(), self.data.len() - self.position);
 
-        if to_read == 0 {
-            return Ok(0); // EOF
+        if bytes_to_read == 0 {
+            return Ok(0); // No more data to read
         }
 
-        buf[..to_read].copy_from_slice(&self.data[self.position..self.position + to_read]);
-        self.position += to_read;
-        Ok(to_read)
+        // Copy the data into the buffer
+        buf[..bytes_to_read]
+            .copy_from_slice(&self.data[self.position..self.position + bytes_to_read]);
+
+        // Update the position
+        self.position += bytes_to_read;
+
+        Ok(bytes_to_read) // Return the number of bytes read
     }
 }
 
