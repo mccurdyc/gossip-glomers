@@ -65,10 +65,14 @@
             gnuplot
             git # not sure why maelstrom needs this
           ];
+
+          inherit (self.packages.${system}) echo unique broadcast counter;
         in
         {
           # This is needed for pkgs-unstable - https://github.com/hercules-ci/flake-parts/discussions/105
-          overlayAttrs = { inherit pkgs-unstable overlays; };
+          overlayAttrs = {
+            inherit pkgs-unstable overlays;
+          };
 
           formatter = pkgs.nixpkgs-fmt;
 
@@ -110,6 +114,66 @@
                 shfmt.enable = true;
               };
             };
+
+            # https://github.com/NixOS/nix/issues/8881
+            # nix build '.#checks.x86_64-linux.echo'
+            echo = pkgs.stdenv.mkDerivation {
+              name = "maelstrom-echo";
+              src = ./.;
+
+              buildInputs = maelstromDeps ++ [ echo ];
+
+              checkPhase = ''
+                mkdir -p $out
+                echo "===> running 'maelstrom echo' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w echo --bin ${echo}/bin/echo --node-count 1 --time-limit 10
+              '';
+            };
+
+            # https://github.com/NixOS/nix/issues/8881
+            # nix build '.#checks.x86_64-linux.unqiue'
+            unique = pkgs.stdenv.mkDerivation {
+              name = "maelstrom-unique";
+              src = ./.;
+
+              buildInputs = maelstromDeps ++ [ unique ];
+
+              checkPhase = ''
+                mkdir -p $out
+                echo "===> running 'maelstrom unique-id' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w unique-ids --bin ${unique}/bin/unique --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
+              '';
+            };
+
+            # https://github.com/NixOS/nix/issues/8881
+            # nix build '.#checks.x86_64-linux.broadcast'
+            broadcast = pkgs.stdenv.mkDerivation {
+              name = "maelstrom-broadcast";
+              src = ./.;
+
+              buildInputs = maelstromDeps ++ [ broadcast ];
+
+              checkPhase = ''
+                mkdir -p $out
+                echo "===> running 'maelstrom broadcast' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ${broadcast}/bin/broadcast --node-count 1 --time-limit 20 --rate 10
+              '';
+            };
+
+            # https://github.com/NixOS/nix/issues/8881
+            # nix build '.#checks.x86_64-linux.counter'
+            counter = pkgs.stdenv.mkDerivation {
+              name = "maelstrom-counter";
+              src = ./.;
+
+              buildInputs = maelstromDeps ++ [ counter ];
+
+              checkPhase = ''
+                mkdir -p $out
+                echo "===> running 'maelstrom counter' tests"
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w g-counter --bin ${counter}/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
+              '';
+            };
           };
 
           packages = {
@@ -124,11 +188,6 @@
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               doInstallCheck = true; # disable so that these can be built independently
-              nativeInstallCheckInputs = maelstromDeps;
-              installCheckPhase = ''
-                echo "===> running 'maelstrom echo' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w echo --bin $out/bin/echo --node-count 1 --time-limit 10
-              '';
             };
 
             # nix build '.#unique'
@@ -142,11 +201,6 @@
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               doInstallCheck = true; # disable so that these can be built independently
-              nativeInstallCheckInputs = maelstromDeps;
-              installCheckPhase = ''
-                echo "===> running 'maelstrom unique-id' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w unique-ids --bin $out/bin/unique --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
-              '';
             };
 
             # nix build '.#broadcast'
@@ -160,11 +214,6 @@
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               doInstallCheck = true; # disable so that these can be built independently
-              nativeInstallCheckInputs = maelstromDeps;
-              installCheckPhase = ''
-                echo "===> running 'maelstrom broadcast' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin $out/bin/broadcast --node-count 1 --time-limit 20 --rate 10
-              '';
             };
 
             # nix build '.#counter'
@@ -178,12 +227,6 @@
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
               doInstallCheck = true; # disable so that these can be built independently
-              nativeInstallCheckInputs = maelstromDeps;
-              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
-              installCheckPhase = ''
-                echo "===> running 'maelstrom counter' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w g-counter --bin $out/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
-              '';
             };
           };
 
