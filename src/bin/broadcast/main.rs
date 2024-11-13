@@ -1,11 +1,12 @@
 use app::{broadcast, config, node, store};
 use std::io;
+use std::path::Path;
 
 fn main() {
-    let s = store::MemoryStore::new().expect("failed to create store");
+    let s = store::FileStore::new(Path::new("store.txt")).expect("failed to create store");
     let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
         .expect("failed to get config");
-    let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
+    let mut n: node::Node<store::FileStore> = node::Node::new(s);
 
     n.run(
         io::stdin().lock(),
