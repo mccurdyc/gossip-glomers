@@ -23,6 +23,33 @@ mod tests {
     });
 
     #[test]
+    fn run() {
+        let test_cases = vec![(
+            r#"{"id":42,"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"32","node_ids":["n1","n2","n3"]}}
+"#,
+            r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+"#,
+        )];
+
+        for (input, expected) in test_cases {
+            let s = store::MemoryStore::new().expect("failed to create store");
+            let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+                .expect("failed to get config");
+            let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
+
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            n.run(read_cursor, write_cursor, echo::listen, cfg)
+                .expect("Node did NOT run");
+
+            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+        }
+    }
+
+    #[test]
     fn echo() {
         // setup closure
         (|| {

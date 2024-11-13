@@ -15,6 +15,7 @@ pub struct Node<S: store::Store> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
 enum Message {
     Init(init::Payload),
     Other(HashMap<String, serde_json::Value>),
@@ -72,7 +73,6 @@ impl<S: store::Store> Node<S> {
                 info!(">> input: {:?}", msg);
 
                 match msg {
-                    // Node didn't respond to init message
                     Message::Init(init::Payload { src, dest, body }) => {
                         // If the message is an Init message, we need to actually configure
                         // the node object above.
