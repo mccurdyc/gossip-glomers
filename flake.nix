@@ -146,17 +146,19 @@
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build '.#checks.x86_64-linux.broadcast'
-            broadcast = pkgs.stdenv.mkDerivation {
+            # nix run '.#checks.x86_64-linux.broadcast'
+            # https://nixos.org/manual/nixpkgs/stable/#trivial-builder-writeShellApplication
+            broadcast = pkgs.writeShellApplication {
               name = "maelstrom-broadcast";
-              src = ./.;
 
-              buildInputs = maelstromDeps ++ [ broadcast ];
+              derivationArgs = {
+                src = ./.; # for ./maelstrom.jar
+              };
+              runtimeInputs = maelstromDeps ++ [ broadcast ];
 
-              checkPhase = ''
-                mkdir -p $out
+              text = ''
                 echo "===> running 'maelstrom broadcast' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ${broadcast}/bin/broadcast --node-count 1 --time-limit 20 --rate 10
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ${broadcast} --node-count 1 --time-limit 20 --rate 10
               '';
             };
 

@@ -148,11 +148,7 @@ where
     let msg: Message = serde_json::from_reader(reader)?;
     match msg {
         Message::Broadcast(BroadcastPayload { src, dest, body }) => {
-            let messages: &mut [u8] = &mut [];
-            node.store.read(messages)?;
-
-            let joined = [messages, &mut serde_json::to_vec(&body)?].concat();
-            serde_json::ser::to_writer(&mut node.store, &joined)?;
+            serde_json::ser::to_writer(&mut node.store, &body.message)?;
 
             let resp = BroadcastResp {
                 src: dest,
@@ -169,12 +165,14 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            let mut v: Vec<u32> = Vec::new();
-            let mut interim: Vec<u8> = Vec::new();
+            let mut seen = Vec::<u32>::new();
+            let mut s = String::new();
 
-            if let Ok(_) = node.store.read_to_end(&mut interim) {
-                for x in interim.iter() {
-                    v.push(*x as u32);
+            loop {
+                if let Ok(_) = node.store.read_line(&mut s) {
+                    seen.push(s.parse::<u32>()?);
+                } else {
+                    break;
                 }
             }
 
@@ -184,7 +182,7 @@ where
                 body: ReadRespBody {
                     typ: "read_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    messages: v,
+                    messages: seen,
                 },
             };
             let mut resp_str = serde_json::to_string(&resp)?;
