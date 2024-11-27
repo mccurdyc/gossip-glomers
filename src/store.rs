@@ -80,8 +80,8 @@ impl<'a> Store for FileStore<'a> {}
 impl<'a> FileStore<'a> {
     pub fn new(f: &'a File) -> Result<Self, std::io::Error> {
         Ok(FileStore {
-            file: &f,
-            br: BufReader::new(&f),
+            file: f,
+            br: BufReader::new(f),
         })
     }
 }
@@ -93,7 +93,7 @@ impl<'a> Write for FileStore<'a> {
         // But need to figure out how to expose this nicely in the Store interface
         // Maybe the same as BufReader where it's not exposed, but an implementation detail?
         let s = self.file.write(buf)?;
-        self.file.write(b"\n")?;
+        let _ = self.file.write(b"\n")?;
         self.file.flush()?;
         self.file.unlock()?;
 

@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use app::{broadcast, config, counter, echo, node, store, unique};
-    use once_cell::sync::Lazy;
     use std::io::{Cursor, Write};
     use std::vec::Vec;
     use tempfile::NamedTempFile;
@@ -14,23 +13,8 @@ mod tests {
         }
     }
 
-    // Ensure that the `tracing` stack is only initialised once using `once_cell`
-    static TRACING: Lazy<()> = Lazy::new(|| {
-        tracing_subscriber::fmt()
-            .with_writer(std::io::stderr) // all debug logs have to go to stderr
-            .with_max_level(tracing::Level::DEBUG)
-            .init();
-    });
-
     #[test]
     fn run() {
-        // setup closure
-        (|| {
-            // The first time `initialize` is invoked the code in `TRACING` is executed.
-            // All other invocations will instead skip execution.
-            Lazy::force(&TRACING);
-        })();
-
         let test_cases = vec![(
             r#"{"id":42,"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"32","node_ids":["n1","n2","n3"]}}
 "#,
@@ -59,13 +43,6 @@ mod tests {
 
     #[test]
     fn echo() {
-        // setup closure
-        (|| {
-            // The first time `initialize` is invoked the code in `TRACING` is executed.
-            // All other invocations will instead skip execution.
-            Lazy::force(&TRACING);
-        })();
-
         let test_cases = vec![
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"echo","msg_id":1,"echo":"Please echo 35"}}
@@ -101,13 +78,6 @@ mod tests {
 
     #[test]
     fn unique() {
-        // setup closure
-        (|| {
-            // The first time `initialize` is invoked the code in `TRACING` is executed.
-            // All other invocations will instead skip execution.
-            Lazy::force(&TRACING);
-        })();
-
         let test_cases = vec![
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
@@ -142,13 +112,6 @@ mod tests {
 
     #[test]
     fn broadcast() {
-        // setup closure
-        (|| {
-            // The first time `initialize` is invoked the code in `TRACING` is executed.
-            // All other invocations will instead skip execution.
-            Lazy::force(&TRACING);
-        })();
-
         let test_cases = vec![
             (
                 "one",
@@ -211,10 +174,6 @@ mod tests {
     fn counter() {
         // setup closure
         let setup = |starting_value: u32| {
-            // The first time `initialize` is invoked the code in `TRACING` is executed.
-            // All other invocations will instead skip execution.
-            Lazy::force(&TRACING);
-
             let mut f = NamedTempFile::new().expect("Failed to create test tempfile");
             let buf = u32::to_be_bytes(starting_value);
             f.write_all(&buf)

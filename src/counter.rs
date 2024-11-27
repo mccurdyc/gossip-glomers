@@ -103,15 +103,15 @@ where
     info!(">> input: {:?}", msg);
     match msg {
         Message::Add(AddPayload { src, dest, body }) => {
-            let mut old: &mut [u8] = &mut [];
-            node.store.read(&mut old)?;
+            let old: &mut [u8] = &mut [];
+            let _ = node.store.read(old)?;
 
             if let Ok(v) = old.try_into() {
                 let o = u32::from_ne_bytes(v);
                 let new = o + body.delta;
                 let b: [u8; 4] = new.to_ne_bytes();
                 let b_slice: &[u8] = &b;
-                node.store.write(b_slice)?;
+                node.store.write_all(b_slice)?;
             }
 
             let resp = AddResp {

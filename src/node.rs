@@ -55,13 +55,6 @@ impl<S: store::Store> Node<S> {
         T: config::TimeSource,
         S: store::Store,
     {
-        // TODO: this should be initialized in `main` not here.
-        // Initialize the default subscriber, which logs to stdout
-        tracing_subscriber::fmt()
-            .with_writer(std::io::stderr) // all debug logs have to go to stderr
-            .with_max_level(tracing::Level::DEBUG)
-            .init();
-
         info!("starting listener...");
 
         for line in reader.lines() {
@@ -93,7 +86,7 @@ impl<S: store::Store> Node<S> {
                     }
                     Message::Other(_) => {
                         let buf = Box::new(Cursor::new(l));
-                        let _ = match f(self, buf, &mut writer, &cfg) {
+                        match f(self, buf, &mut writer, &cfg) {
                             Ok(_) => {}
                             Err(e) => {
                                 error!("error listening: {:?}", e);

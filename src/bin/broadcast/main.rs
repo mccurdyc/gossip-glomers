@@ -4,9 +4,16 @@ use std::io;
 use std::path::Path;
 
 fn main() {
+    // Initialize the default subscriber, which logs to stdout
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr) // all debug logs have to go to stderr
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     let p = Path::new("./store.txt");
     let f = OpenOptions::new()
         .create(true)
+        .truncate(true)
         .read(true)
         .write(true)
         .open(p)

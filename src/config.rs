@@ -7,7 +7,7 @@ pub trait TimeSource {
 pub struct SystemTime;
 impl TimeSource for SystemTime {
     fn now(&self) -> std::time::SystemTime {
-        return std::time::SystemTime::now();
+        std::time::SystemTime::now()
     }
 }
 
