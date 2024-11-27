@@ -1,9 +1,17 @@
 use app::{broadcast, config, node, store};
+use std::fs::OpenOptions;
 use std::io;
 use std::path::Path;
 
 fn main() {
-    let s = store::FileStore::new(Path::new("./store.txt")).expect("failed to create store");
+    let p = Path::new("./store.txt");
+    let f = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(p)
+        .expect("failed to create store file");
+    let s = store::FileStore::new(&f).expect("failed to create store");
     let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
         .expect("failed to get config");
     let mut n: node::Node<store::FileStore> = node::Node::new(s);

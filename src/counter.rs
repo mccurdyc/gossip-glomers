@@ -129,11 +129,12 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            let mut stored_val: &mut [u8] = &mut [];
-            node.store.read(&mut stored_val)?;
+            let mut sum: u32 = 0;
 
-            let v = stored_val.try_into()?;
-            let o = u32::from_ne_bytes(v);
+            for line in (&mut node.store).lines() {
+                let d: u32 = line?.parse()?;
+                sum += d
+            }
 
             let resp = ReadResp {
                 src: dest,
@@ -141,7 +142,7 @@ where
                 body: ReadRespBody {
                     typ: "read_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    value: o,
+                    value: sum,
                 },
             };
 

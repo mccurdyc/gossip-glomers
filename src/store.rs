@@ -1,30 +1,31 @@
 use fs2::FileExt;
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, Error, Read, Write};
-use std::path::Path;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Error, Read, Write};
 
 // std::io::{Read,Write} Supertrait
 pub trait Store: Write + Read + BufRead {}
 
 #[derive(Debug)]
-pub struct MemoryStore<'a> {
-    buffer: &'a mut [u8],
+pub struct MemoryStore {
+    buf: Vec<u8>,
     position: usize,
 }
 
-impl<'a> MemoryStore<'a> {
-    pub fn new(buffer: &'a mut [u8]) -> Result<Self, std::io::Error> {
+impl MemoryStore {
+    pub fn new(v: Vec<u8>) -> Result<Self, std::io::Error> {
         Ok(Self {
-            buffer,
+            buf: v,
             position: 0,
         })
     }
 }
 
-impl<'a> Store for MemoryStore<'a> {}
-impl<'a> Write for MemoryStore<'a> {
+impl Store for MemoryStore {}
+impl Write for MemoryStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        self.buffer.copy_from_slice(&buf[..]);
+        for v in buf {
+            self.buf.push(*v);
+        }
         Ok(buf.len())
     }
 
@@ -39,10 +40,10 @@ impl<'a> Write for MemoryStore<'a> {
     }
 }
 
-impl<'a> Read for MemoryStore<'a> {
+impl Read for MemoryStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         // Calculate how many bytes can be read
-        let bytes_to_read = std::cmp::min(buf.len(), self.buffer.len() - self.position);
+        let bytes_to_read = std::cmp::min(buf.len(), self.buf.len() - self.position);
 
         if bytes_to_read == 0 {
             return Ok(0); // No more data to read
@@ -50,7 +51,7 @@ impl<'a> Read for MemoryStore<'a> {
 
         // Copy the data into the buffer
         buf[..bytes_to_read]
-            .copy_from_slice(&self.buffer[self.position..self.position + bytes_to_read]);
+            .copy_from_slice(&self.buf[self.position..self.position + bytes_to_read]);
 
         // Update the position
         self.position += bytes_to_read;
@@ -59,45 +60,28 @@ impl<'a> Read for MemoryStore<'a> {
     }
 }
 
-impl<'a> BufRead for MemoryStore<'a> {
+impl BufRead for MemoryStore {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        if self.position < self.buffer.len() {
-            Ok(&self.buffer[self.position..])
-        } else {
-            Ok(&[]) // No more data
-        }
+        Ok(&self.buf[self.position..])
     }
+
     fn consume(&mut self, amt: usize) {
         self.position += amt;
-        if self.position > self.buffer.len() {
-            self.position = self.buffer.len(); // Prevent overflow
-        }
     }
 }
 
 #[derive(Debug)]
 pub struct FileStore<'a> {
-    file: File,
-    buffer: &'a [u8],
-    position: usize,
-    buffer_size: usize,
-    _path: &'a Path,
+    file: &'a File,
+    br: BufReader<&'a File>,
 }
 
 impl<'a> Store for FileStore<'a> {}
 impl<'a> FileStore<'a> {
-    pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
-        let f = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(path)?;
+    pub fn new(f: &'a File) -> Result<Self, std::io::Error> {
         Ok(FileStore {
-            file: f,
-            buffer: &[],
-            position: 0,
-            buffer_size: 0,
-            _path: path,
+            file: &f,
+            br: BufReader::new(&f),
         })
     }
 }
@@ -107,6 +91,7 @@ impl<'a> Write for FileStore<'a> {
         self.file.lock_exclusive()?;
         // I'd prefer to use a LineWriter - https://doc.rust-lang.org/std/io/struct.LineWriter.html
         // But need to figure out how to expose this nicely in the Store interface
+        // Maybe the same as BufReader where it's not exposed, but an implementation detail?
         let s = self.file.write(buf)?;
         self.file.write(b"\n")?;
         self.file.flush()?;
@@ -134,37 +119,21 @@ impl<'a> Write for FileStore<'a> {
 impl<'a> Read for FileStore<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
-        let bytes_to_read = std::cmp::min(buf.len(), self.buffer_size - self.position);
-
-        if bytes_to_read == 0 {
-            return Ok(0); // No more data to read
-        }
-
-        // Copy the data into the buffer
-        buf[..bytes_to_read]
-            .copy_from_slice(&self.buffer[self.position..self.position + bytes_to_read]);
-
-        // Update the position
-        self.position += bytes_to_read;
-
+        let s = self.file.read(buf)?;
         self.file.unlock()?;
-
-        Ok(bytes_to_read) // Return the number of bytes read
+        Ok(s)
     }
 }
 
 impl<'a> BufRead for FileStore<'a> {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        if self.position < self.buffer.len() {
-            Ok(&self.buffer[self.position..])
-        } else {
-            Ok(&[]) // No more data
-        }
+        self.file.lock_exclusive()?;
+        let r = self.br.fill_buf();
+        self.file.unlock()?;
+        r
     }
+
     fn consume(&mut self, amt: usize) {
-        self.position += amt;
-        if self.position > self.buffer.len() {
-            self.position = self.buffer.len(); // Prevent overflow
-        }
+        self.br.consume(amt)
     }
 }

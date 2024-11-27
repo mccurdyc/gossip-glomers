@@ -2,7 +2,7 @@ use app::{config, node, store, unique};
 use std::io;
 
 fn main() {
-    let buf: &mut [u8] = &mut [];
+    let buf: Vec<u8> = Vec::new();
     let s = store::MemoryStore::new(buf).expect("failed to create store");
     let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
         .expect("failed to get config");

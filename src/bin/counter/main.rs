@@ -1,14 +1,19 @@
-use app::config;
-use app::config::SystemTime;
-use app::counter;
-use app::node;
-use app::store;
+use app::{config, counter, node, store};
+use std::fs::OpenOptions;
 use std::io;
 use std::path::Path;
 
 fn main() {
-    let s = store::FileStore::new(&Path::new("./data.txt")).expect("failed to create store");
-    let cfg = config::Config::<SystemTime>::new(&SystemTime {}).expect("failed to get config");
+    let p = Path::new("./counter.txt");
+    let f = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(p)
+        .expect("failed to create store file");
+    let s = store::FileStore::new(&f).expect("failed to create store");
+    let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+        .expect("failed to get config");
     let mut n: node::Node<store::FileStore> = node::Node::new(s);
 
     n.run(

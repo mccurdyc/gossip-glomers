@@ -149,6 +149,7 @@ where
     match msg {
         Message::Broadcast(BroadcastPayload { src, dest, body }) => {
             serde_json::ser::to_writer(&mut node.store, &body.message)?;
+            node.store.write_all(b"\n")?;
 
             let resp = BroadcastResp {
                 src: dest,
@@ -166,14 +167,12 @@ where
         }
         Message::Read(ReadPayload { src, dest, body }) => {
             let mut seen = Vec::<u32>::new();
-            let mut s = String::new();
 
-            loop {
-                if let Ok(_) = node.store.read_line(&mut s) {
-                    seen.push(s.parse::<u32>()?);
-                } else {
-                    break;
-                }
+            for line in (&mut node.store).lines() {
+                info!("line: {:?}", &line); // TODO: line is getting the entire buf because we are
+                                            // reading from a memstore and not a per-line filestore
+                let v: u32 = line?.parse()?;
+                seen.push(v);
             }
 
             let resp = ReadResp {
@@ -185,6 +184,7 @@ where
                     messages: seen,
                 },
             };
+
             let mut resp_str = serde_json::to_string(&resp)?;
             resp_str.push('\n');
             info!("<< output: {:?}", &resp_str);

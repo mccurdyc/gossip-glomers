@@ -5,7 +5,7 @@ mod tests {
     use std::io::{Cursor, Write};
     use std::vec::Vec;
     use tempfile::NamedTempFile;
-    use tracing::{error, info};
+    use tracing::info;
 
     struct MockTime;
     impl app::config::TimeSource for MockTime {
@@ -24,6 +24,13 @@ mod tests {
 
     #[test]
     fn run() {
+        // setup closure
+        (|| {
+            // The first time `initialize` is invoked the code in `TRACING` is executed.
+            // All other invocations will instead skip execution.
+            Lazy::force(&TRACING);
+        })();
+
         let test_cases = vec![(
             r#"{"id":42,"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"32","node_ids":["n1","n2","n3"]}}
 "#,
@@ -32,7 +39,7 @@ mod tests {
         )];
 
         for (input, expected) in test_cases {
-            let buf: &mut [u8] = &mut [];
+            let buf: Vec<u8> = Vec::new();
             let s = store::MemoryStore::new(buf).expect("failed to create store");
             let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                 .expect("failed to get config");
@@ -74,7 +81,7 @@ mod tests {
             ),
         ];
 
-        let buf: &mut [u8] = &mut [];
+        let buf: Vec<u8> = Vec::new();
         let s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
             .expect("failed to get config");
@@ -116,7 +123,7 @@ mod tests {
             ),
         ];
 
-        let buf: &mut [u8] = &mut [];
+        let buf: Vec<u8> = Vec::new();
         let s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<MockTime>::new(&MockTime {}).expect("failed to get config");
         let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
@@ -146,41 +153,39 @@ mod tests {
             (
                 "one",
                 Box::new(|| -> store::MemoryStore {
-                    let buf: &mut [u8] = &mut [];
+                    let buf: Vec<u8> = Vec::new();
                     store::MemoryStore::new(buf).expect("failed to create store")
-                }) as Box<dyn Fn() -> store::MemoryStore<'static>>,
+                }) as Box<dyn Fn() -> store::MemoryStore>,
                 r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 42}}
         "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":1}}
-        "#,
+"#,
             ),
             (
                 "two",
                 Box::new(|| -> store::MemoryStore {
-                    let buf: &mut [u8] = &mut [];
-                    let mut s = store::MemoryStore::new(buf).expect("failed to create store");
-                    if let Err(e) = s.write([1, 2, 3].as_slice()) {
-                        error!("failed to populate MemoryStore in setup_fn: {:?}", e);
-                    };
+                    let buf = String::from("1\n2\n3\n");
+                    let s = store::MemoryStore::new(buf.as_bytes().to_vec())
+                        .expect("failed to create store");
 
                     info!("store: {:?}", s);
                     s
-                }) as Box<dyn Fn() -> store::MemoryStore<'static>>,
+                }) as Box<dyn Fn() -> store::MemoryStore>,
                 r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
         "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1,2,3]}}
-        "#,
+"#,
             ),
             (
                 "three",
                 Box::new(|| -> store::MemoryStore {
-                    let buf: &mut [u8] = &mut [];
+                    let buf: Vec<u8> = Vec::new();
                     store::MemoryStore::new(buf).expect("failed to create store")
-                }) as Box<dyn Fn() -> store::MemoryStore<'static>>,
+                }) as Box<dyn Fn() -> store::MemoryStore>,
                 r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":101,"topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
         "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":101}}
-        "#,
+"#,
             ),
         ];
 
@@ -204,7 +209,12 @@ mod tests {
 
     #[test]
     fn counter() {
+        // setup closure
         let setup = |starting_value: u32| {
+            // The first time `initialize` is invoked the code in `TRACING` is executed.
+            // All other invocations will instead skip execution.
+            Lazy::force(&TRACING);
+
             let mut f = NamedTempFile::new().expect("Failed to create test tempfile");
             let buf = u32::to_be_bytes(starting_value);
             f.write_all(&buf)
@@ -226,7 +236,7 @@ mod tests {
 "#,
         )];
 
-        let buf: &mut [u8] = &mut [];
+        let buf: Vec<u8> = Vec::new();
         let s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
             .expect("failed to get config");
@@ -239,11 +249,8 @@ mod tests {
             let read_cursor = Cursor::new(input.as_bytes());
 
             let f = setup(starting_value);
-
             counter::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
-
             assert_eq!(String::from_utf8(vec).unwrap(), expected);
-
             cleanup(f);
         }
     }
