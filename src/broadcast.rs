@@ -12,17 +12,6 @@ use tracing::info;
 // Data can be stored in-memory as node processes are not killed by Maelstrom.
 // - It should store the "message" value locally so it can be read later. When a "read"
 // request is sent.
-//
-// TODO:
-// - "broadcast" type message
-// - "read" type message for all broadcast values the node saw
-// - "topology" type message - just ack b/c "All nodes can communicate with each other regardless
-// of the topology passed in."
-// - test
-// ```bash
-// ./maelstrom test -w broadcast --bin ~/go/bin/maelstrom-broadcast --node-count 1 --time-limit 20 --rate 10
-// ```
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 struct BroadcastPayload {
@@ -169,8 +158,7 @@ where
             let mut seen = Vec::<u32>::new();
 
             for line in (&mut node.store).lines() {
-                info!("line: {:?}", &line); // TODO: line is getting the entire buf because we are
-                                            // reading from a memstore and not a per-line filestore
+                info!("line: {:?}", &line);
                 let v: u32 = line?.parse()?;
                 seen.push(v);
             }
