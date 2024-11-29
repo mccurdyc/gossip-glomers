@@ -116,64 +116,62 @@
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build '.#checks.x86_64-linux.echo'
-            echo = pkgs.stdenv.mkDerivation {
+            # nix build --rebuild '.#checks.x86_64-linux.echo' --print-build-logs
+            # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
+            # We use mkDerivation instead of runCommand because we need to set `src`.
+            echo = pkgs.stdenvNoCC.mkDerivation {
               name = "maelstrom-echo";
               src = ./.;
-
-              buildInputs = maelstromDeps ++ [ echo ];
-
-              checkPhase = ''
-                mkdir -p $out
-                echo "===> running 'maelstrom echo' tests"
+              nativeBuildInputs = maelstromDeps ++ [ echo ];
+              buildPhase = ''
+                  echo "===> running 'maelstrom echo' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w echo --bin ${echo}/bin/echo --node-count 1 --time-limit 10
+                mkdir -p $out # required by derivations even though it's empty
               '';
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build '.#checks.x86_64-linux.unqiue'
-            unique = pkgs.stdenv.mkDerivation {
+            # nix build --rebuild '.#checks.x86_64-linux.unique' --print-build-logs
+            # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
+            # We use mkDerivation instead of runCommand because we need to set `src`.
+            unique = pkgs.stdenvNoCC.mkDerivation {
               name = "maelstrom-unique";
               src = ./.;
-
-              buildInputs = maelstromDeps ++ [ unique ];
-
-              checkPhase = ''
-                mkdir -p $out
-                echo "===> running 'maelstrom unique-id' tests"
+              nativeBuildInputs = maelstromDeps ++ [ unique ];
+              buildPhase = ''
+                echo "===> running 'maelstrom unique' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w unique-ids --bin ${unique}/bin/unique --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
+                mkdir -p $out
               '';
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix run '.#checks.x86_64-linux.broadcast'
-            # https://nixos.org/manual/nixpkgs/stable/#trivial-builder-writeShellApplication
-            broadcast = pkgs.writeShellApplication {
+            # nix build --rebuild '.#checks.x86_64-linux.broadcast' --print-build-logs
+            # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
+            # We use mkDerivation instead of runCommand because we need to set `src`.
+            broadcast = pkgs.stdenvNoCC.mkDerivation {
               name = "maelstrom-broadcast";
-
-              derivationArgs = {
-                src = ./.; # for ./maelstrom.jar
-              };
-              runtimeInputs = maelstromDeps ++ [ broadcast ];
-
-              text = ''
+              src = ./.;
+              nativeBuildInputs = maelstromDeps ++ [ broadcast ];
+              buildPhase = ''
                 echo "===> running 'maelstrom broadcast' tests"
-                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ${broadcast} --node-count 1 --time-limit 20 --rate 10
+                java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ${broadcast}/bin/broadcast --node-count 1 --time-limit 20 --rate 10
+                mkdir -p $out
               '';
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build '.#checks.x86_64-linux.counter'
-            counter = pkgs.stdenv.mkDerivation {
+            # nix build --rebuild '.#checks.x86_64-linux.counter' --print-build-logs
+            # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
+            # We use mkDerivation instead of runCommand because we need to set `src`.
+            counter = pkgs.stdenvNoCC.mkDerivation {
               name = "maelstrom-counter";
               src = ./.;
-
-              buildInputs = maelstromDeps ++ [ counter ];
-
-              checkPhase = ''
-                mkdir -p $out
+              nativeBuildInputs = maelstromDeps ++ [ counter ];
+              buildPhase = ''
                 echo "===> running 'maelstrom counter' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w g-counter --bin ${counter}/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
+                mkdir -p $out
               '';
             };
           };
@@ -188,8 +186,6 @@
               cargoLock.lockFile = ./Cargo.lock;
               cargoBuildFlags = [ "--bin" "echo" ];
               doCheck = false; # disable so that these can be built independently
-              # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
-              doInstallCheck = true; # disable so that these can be built independently
             };
 
             # nix build '.#unique'
@@ -202,7 +198,7 @@
               cargoBuildFlags = [ "--bin" "unique" ];
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
-              doInstallCheck = true; # disable so that these can be built independently
+              doInstallCheck = false; # disable so that these can be built independently
             };
 
             # nix build '.#broadcast'
@@ -215,7 +211,7 @@
               cargoBuildFlags = [ "--bin" "broadcast" ];
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
-              doInstallCheck = true; # disable so that these can be built independently
+              doInstallCheck = false; # disable so that these can be built independently
             };
 
             # nix build '.#counter'
@@ -228,7 +224,7 @@
               cargoBuildFlags = [ "--bin" "counter" ];
               doCheck = false; # disable so that these can be built independently
               # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
-              doInstallCheck = true; # disable so that these can be built independently
+              doInstallCheck = false; # disable so that these can be built independently
             };
           };
 
