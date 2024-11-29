@@ -60,7 +60,7 @@
           };
 
           maelstromDeps = with pkgs; [
-            # breakpointHook # debugging
+            breakpointHook # debugging - https://discourse.nixos.org/t/debug-a-failed-derivation-with-breakpointhook-and-cntr/8669
             jdk22_headless
             gnuplot
             git # not sure why maelstrom needs this
@@ -246,6 +246,7 @@
               pkgs.hadolint
               pkgs.dockerfile-language-server-nodejs
               pkgs.dive
+              pkgs.cntr
 
               # Rust
               # NOTES:
