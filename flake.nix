@@ -60,7 +60,7 @@
           };
 
           maelstromDeps = with pkgs; [
-            breakpointHook # debugging - https://discourse.nixos.org/t/debug-a-failed-derivation-with-breakpointhook-and-cntr/8669
+            # breakpointHook # debugging - https://discourse.nixos.org/t/debug-a-failed-derivation-with-breakpointhook-and-cntr/8669
             jdk22_headless
             gnuplot
             git # not sure why maelstrom needs this
@@ -116,7 +116,8 @@
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build --rebuild '.#checks.x86_64-linux.echo' --print-build-logs
+            # nix build '.#checks.x86_64-linux.echo' --print-build-logs --keep-failed
+            # --keep-failed writes the sandbox directory at /tmp/nix-build-.../build/<hash>-source/
             # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
             # We use mkDerivation instead of runCommand because we need to set `src`.
             echo = pkgs.stdenvNoCC.mkDerivation {
@@ -124,14 +125,15 @@
               src = ./.;
               nativeBuildInputs = maelstromDeps ++ [ echo ];
               buildPhase = ''
-                  echo "===> running 'maelstrom echo' tests"
+                echo "===> running 'maelstrom echo' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w echo --bin ${echo}/bin/echo --node-count 1 --time-limit 10
                 mkdir -p $out # required by derivations even though it's empty
               '';
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build --rebuild '.#checks.x86_64-linux.unique' --print-build-logs
+            # nix build '.#checks.x86_64-linux.unique' --print-build-logs --keep-failed
+            # --keep-failed writes the sandbox directory at /tmp/nix-build-.../build/<hash>-source/
             # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
             # We use mkDerivation instead of runCommand because we need to set `src`.
             unique = pkgs.stdenvNoCC.mkDerivation {
@@ -141,12 +143,13 @@
               buildPhase = ''
                 echo "===> running 'maelstrom unique' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w unique-ids --bin ${unique}/bin/unique --time-limit 30 --rate 1000 --node-count 3 --availability total --nemesis partition
-                mkdir -p $out
+                mkdir -p $out # required by derivations even though it's empty
               '';
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build --rebuild '.#checks.x86_64-linux.broadcast' --print-build-logs
+            # nix build '.#checks.x86_64-linux.broadcast' --print-build-logs --keep-failed
+            # --keep-failed writes the sandbox directory at /tmp/nix-build-.../build/<hash>-source/
             # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
             # We use mkDerivation instead of runCommand because we need to set `src`.
             broadcast = pkgs.stdenvNoCC.mkDerivation {
@@ -156,12 +159,13 @@
               buildPhase = ''
                 echo "===> running 'maelstrom broadcast' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ${broadcast}/bin/broadcast --node-count 1 --time-limit 20 --rate 10
-                mkdir -p $out
+                mkdir -p $out # required by derivations even though it's empty
               '';
             };
 
             # https://github.com/NixOS/nix/issues/8881
-            # nix build --rebuild '.#checks.x86_64-linux.counter' --print-build-logs
+            # nix build '.#checks.x86_64-linux.counter' --print-build-logs --keep-failed
+            # --keep-failed writes the sandbox directory at /tmp/nix-build-.../build/<hash>-source/
             # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
             # We use mkDerivation instead of runCommand because we need to set `src`.
             counter = pkgs.stdenvNoCC.mkDerivation {
@@ -171,7 +175,7 @@
               buildPhase = ''
                 echo "===> running 'maelstrom counter' tests"
                 java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w g-counter --bin ${counter}/bin/counter --node-count 3 --time-limit 20 --rate 100 --nemesis partition
-                mkdir -p $out
+                mkdir -p $out # required by derivations even though it's empty
               '';
             };
           };

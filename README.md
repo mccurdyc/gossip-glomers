@@ -29,9 +29,21 @@ docker run -it echo
 
 ## Maelstrom
 
-### Debugging Failures
-
 ```bash
-./maelstrom serve
+nix build '.#checks.x86_64-linux.echo' --print-build-logs --keep-failed
 ```
 
+### Debugging Failures
+
+Note the `--keep-failed` flag we use above, this keeps the sandbox build directory at `/tmp/nix-build-.../build/<hash>-source/`.
+Then, we can copy the maelstrom `store/` output from that directory to local and then
+run maelstrom's `serve` for further analysis
+
+```bash
+java -Djava.awt.headless=true -jar "./maelstrom.jar" serve
+```
+
+Alternatively, you can use `breakpointHook` to be dropped into the sandbox container directly.
+However, running maelstrom's `serve` command will NOT work from within the sandboxed
+container. It runs but the ports are not accessible by the host machine. You would
+have to set up some kind of bridge interface to bridge to the build containers.
