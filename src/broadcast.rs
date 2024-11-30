@@ -158,7 +158,7 @@ where
             let mut seen = Vec::<u32>::new();
 
             for line in (&mut node.store).lines() {
-                info!("line: {:?}", &line);
+                info!("store line: {:?}", &line);
                 let v: u32 = line?.parse()?;
                 seen.push(v);
             }

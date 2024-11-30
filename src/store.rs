@@ -89,12 +89,7 @@ impl<'a> FileStore<'a> {
 impl<'a> Write for FileStore<'a> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
-        // I'd prefer to use a LineWriter - https://doc.rust-lang.org/std/io/struct.LineWriter.html
-        // But need to figure out how to expose this nicely in the Store interface
-        // Maybe the same as BufReader where it's not exposed, but an implementation detail?
         let s = self.file.write(buf)?;
-        let _ = self.file.write(b"\n")?;
-        self.file.flush()?;
         self.file.unlock()?;
 
         Ok(s)

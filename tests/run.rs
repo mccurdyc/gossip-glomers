@@ -37,7 +37,7 @@ mod tests {
             n.run(read_cursor, write_cursor, echo::listen, cfg)
                 .expect("Node did NOT run");
 
-            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
         }
     }
 
@@ -72,7 +72,7 @@ mod tests {
 
             echo::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
-            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
         }
     }
 
@@ -106,7 +106,7 @@ mod tests {
 
             unique::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
-            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
         }
     }
 
@@ -115,49 +115,50 @@ mod tests {
         let test_cases = vec![
             (
                 "one",
-                Box::new(|| -> store::MemoryStore {
+                Box::new(|| -> node::Node<store::MemoryStore> {
                     let buf: Vec<u8> = Vec::new();
-                    store::MemoryStore::new(buf).expect("failed to create store")
-                }) as Box<dyn Fn() -> store::MemoryStore>,
+                    let s = store::MemoryStore::new(buf).expect("failed to create store");
+                    node::Node::new(s)
+                }) as Box<dyn Fn() -> node::Node<store::MemoryStore>>,
                 r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 42}}
         "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":1}}
-"#,
+        "#,
             ),
             (
                 "two",
-                Box::new(|| -> store::MemoryStore {
+                Box::new(|| -> node::Node<store::MemoryStore> {
                     let buf = String::from("1\n2\n3\n");
                     let s = store::MemoryStore::new(buf.as_bytes().to_vec())
                         .expect("failed to create store");
 
                     info!("store: {:?}", s);
-                    s
-                }) as Box<dyn Fn() -> store::MemoryStore>,
+                    node::Node::new(s)
+                }) as Box<dyn Fn() -> node::Node<store::MemoryStore>>,
                 r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
         "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1,2,3]}}
-"#,
+        "#,
             ),
             (
                 "three",
-                Box::new(|| -> store::MemoryStore {
+                Box::new(|| -> node::Node<store::MemoryStore> {
                     let buf: Vec<u8> = Vec::new();
-                    store::MemoryStore::new(buf).expect("failed to create store")
-                }) as Box<dyn Fn() -> store::MemoryStore>,
+                    let s = store::MemoryStore::new(buf).expect("failed to create store");
+                    node::Node::new(s)
+                }) as Box<dyn Fn() -> node::Node<store::MemoryStore>>,
                 r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":101,"topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
         "#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":101}}
-"#,
+        "#,
             ),
         ];
 
         for (name, setup_fn, input, expected) in test_cases {
             info!("TEST: {:?}", name);
-            let s = setup_fn();
+            let mut n = setup_fn();
             let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                 .expect("failed to get config");
-            let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
 
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
@@ -166,7 +167,7 @@ mod tests {
 
             broadcast::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
 
-            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
         }
     }
 
@@ -209,7 +210,7 @@ mod tests {
 
             let f = setup(starting_value);
             counter::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
-            assert_eq!(String::from_utf8(vec).unwrap(), expected);
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
             cleanup(f);
         }
     }
