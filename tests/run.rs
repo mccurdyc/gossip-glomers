@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use app::{broadcast, config, counter, echo, node, store, unique};
+    use once_cell::sync::Lazy;
     use std::io::{Cursor, Write};
     use std::vec::Vec;
     use tempfile::NamedTempFile;
@@ -12,6 +13,14 @@ mod tests {
             std::time::SystemTime::UNIX_EPOCH
         }
     }
+
+    // Ensure that the `tracing` stack is only initialised once using `once_cell`
+    static TRACING: Lazy<()> = Lazy::new(|| {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr) // all debug logs have to go to stderr
+            .with_max_level(tracing::Level::DEBUG)
+            .init();
+    });
 
     #[test]
     fn run() {
@@ -142,9 +151,7 @@ mod tests {
                         .expect("failed to create memory store"),
                 ),
                 setup_fn: |s: &mut Store| match s {
-                    Store::Memory(v) => v
-                        .write_all(b"1\n2\n3\n")
-                        .expect("failed to write to memory store"),
+                    Store::Memory(_) => {}
                     _ => {
                         panic!("unexpected branch");
                     }
@@ -188,9 +195,7 @@ mod tests {
                         .expect("failed to create memory store"),
                 ),
                 setup_fn: |s: &mut Store| match s {
-                    Store::Memory(v) => v
-                        .write_all(b"1\n2\n3\n")
-                        .expect("failed to write to memory store"),
+                    Store::Memory(_) => {}
                     _ => {
                         panic!("unexpected branch");
                     }
@@ -225,6 +230,10 @@ mod tests {
                 ),
             },
         ];
+
+        // The first time `initialize` is invoked the code in `TRACING` is executed.
+        // All other invocations will instead skip execution.
+        Lazy::force(&TRACING);
 
         for mut case in test_cases {
             info!("TEST: {:?}", case.name);
