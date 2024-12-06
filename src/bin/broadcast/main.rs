@@ -18,10 +18,10 @@ fn main() {
         .write(true)
         .open(p)
         .expect("failed to create store file");
-    let s = store::FileStore::new(&f).expect("failed to create store");
+    let mut s = store::FileStore::new(&f).expect("failed to create store");
     let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
         .expect("failed to get config");
-    let mut n: node::Node<store::FileStore> = node::Node::new(s);
+    let mut n: node::Node<store::FileStore> = node::Node::new(&mut s);
 
     n.run(
         io::stdin().lock(),

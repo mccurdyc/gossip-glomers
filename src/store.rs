@@ -73,7 +73,7 @@ impl BufRead for MemoryStore {
 #[derive(Debug)]
 pub struct FileStore<'a> {
     file: &'a File,
-    br: BufReader<&'a File>,
+    br: BufReader<&'a File>, // Not Copy-safe.
 }
 
 impl<'a> Store for FileStore<'a> {}

@@ -33,10 +33,10 @@ mod tests {
 
         for (input, expected) in test_cases {
             let buf: Vec<u8> = Vec::new();
-            let s = store::MemoryStore::new(buf).expect("failed to create store");
+            let mut s = store::MemoryStore::new(buf).expect("failed to create store");
             let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                 .expect("failed to get config");
-            let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
+            let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
 
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
@@ -68,10 +68,10 @@ mod tests {
         ];
 
         let buf: Vec<u8> = Vec::new();
-        let s = store::MemoryStore::new(buf).expect("failed to create store");
+        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
             .expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -103,9 +103,9 @@ mod tests {
         ];
 
         let buf: Vec<u8> = Vec::new();
-        let s = store::MemoryStore::new(buf).expect("failed to create store");
+        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<MockTime>::new(&MockTime {}).expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -134,6 +134,7 @@ mod tests {
 
     #[test]
     fn broadcast() {
+        // TODO: this should become a tempfile
         let p = std::path::Path::new("./store.txt");
         let f = std::fs::OpenOptions::new()
             .create(true)
@@ -243,15 +244,18 @@ mod tests {
             let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                 .expect("failed to get config");
 
-            (case.setup_fn)(&mut case.s);
+            (case.setup_fn)(&mut case.s); // calls the appropriate setup fn based on the store in
+                                          // the test case
             match case.s {
-                Store::Memory(v) => {
-                    let mut n = node::Node::<store::MemoryStore>::new(v);
+                Store::Memory(mut v) => {
+                    info!("memory");
+                    let mut n = node::Node::<store::MemoryStore>::new(&mut v);
                     broadcast::listen(&mut n, read_cursor, &mut write_cursor, &cfg)
                         .expect("listen failed");
                 }
-                Store::File(v) => {
-                    let mut n = node::Node::<store::FileStore>::new(v);
+                Store::File(mut v) => {
+                    info!("file");
+                    let mut n = node::Node::<store::FileStore>::new(&mut v);
                     broadcast::listen(&mut n, read_cursor, &mut write_cursor, &cfg)
                         .expect("listen failed");
                 }
@@ -287,10 +291,10 @@ mod tests {
         )];
 
         let buf: Vec<u8> = Vec::new();
-        let s = store::MemoryStore::new(buf).expect("failed to create store");
+        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
             .expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore> = node::Node::new(s);
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
 
         for (starting_value, input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes

@@ -157,8 +157,7 @@ where
         Message::Read(ReadPayload { src, dest, body }) => {
             let mut seen = Vec::<u32>::new();
 
-            // TODO: probably need to take a lock here
-            for line in (&mut node.store).lines() {
+            for line in node.store.lines() {
                 info!("store line: {:?}", &line);
                 let v: u32 = line?.parse()?;
                 seen.push(v);

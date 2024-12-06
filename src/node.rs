@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::io::{BufRead, Cursor, Write};
 use tracing::{error, info};
 
-pub struct Node<S: store::Store> {
+pub struct Node<'a, S: store::Store> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.
     #[allow(dead_code)]
     node_ids: Vec<String>,
 
-    pub store: S,
+    pub store: &'a mut S,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,8 +21,8 @@ enum Message {
     Other(HashMap<String, serde_json::Value>),
 }
 
-impl<S: store::Store> Node<S> {
-    pub fn new(s: S) -> Self
+impl<'a, S: store::Store> Node<'a, S> {
+    pub fn new(s: &'a mut S) -> Self
     where
         S: store::Store,
     {
