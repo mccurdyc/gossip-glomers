@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, Cursor, Write};
 use tracing::{error, info};
 
+#[derive(Debug)]
 pub struct Node<'a, S: store::Store> {
     #[allow(dead_code)]
     id: String, // include it as the src of any message it sends.

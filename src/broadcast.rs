@@ -130,7 +130,7 @@ where
     R: BufRead,
     W: Write,
     T: config::TimeSource,
-    S: store::Store,
+    S: store::Store + std::fmt::Debug,
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
@@ -157,9 +157,9 @@ where
         Message::Read(ReadPayload { src, dest, body }) => {
             let mut seen = Vec::<u32>::new();
 
-            for line in node.store.lines() {
-                info!("store line: {:?}", &line);
-                let v: u32 = line?.parse()?;
+            let lines = node.store.lines();
+            for line in lines {
+                let v: u32 = line.expect("failed to extract line").parse()?;
                 seen.push(v);
             }
 

@@ -1,6 +1,7 @@
 use fs2::FileExt;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, Read, Write};
+use std::path::Path;
 
 // std::io::{Read,Write} Supertrait
 pub trait Store: Write + Read + BufRead {}
@@ -71,27 +72,37 @@ impl BufRead for MemoryStore {
 }
 
 #[derive(Debug)]
-pub struct FileStore<'a> {
-    file: &'a File,
-    br: BufReader<&'a File>, // Not Copy-safe.
+pub struct FileStore {
+    // File does not buffer reads and writes. For efficiency, consider wrapping the file in a BufReader or BufWriter when performing many small read or write calls, unless unbuffered reads and writes are required.
+    pub file: File,
+    // The BufReader<R> struct adds buffering to any reader.
+    // It can be excessively inefficient to work directly with a Read instance.
+    // For example, every call to read on TcpStream results in a system call.
+    // A BufReader<R> performs large, infrequent reads on the underlying Read and maintains an in-memory buffer of the results.
+    inner: BufReader<File>, // Not Copy-safe.
 }
 
-impl<'a> Store for FileStore<'a> {}
-impl<'a> FileStore<'a> {
-    pub fn new(f: &'a File) -> Result<Self, std::io::Error> {
-        Ok(FileStore {
-            file: f,
-            br: BufReader::new(f),
-        })
+impl Store for FileStore {}
+impl FileStore {
+    pub fn new(p: &Path) -> Result<Self, std::io::Error> {
+        // We have two separate file descriptors: one for writing
+        // and one for reading. Primarily to avoid having to reset seek, etc.
+        let w = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(p)?;
+
+        let r = std::fs::OpenOptions::new().read(true).open(p)?;
+
+        let inner = BufReader::new(r);
+        Ok(FileStore { file: w, inner })
     }
 }
 
-impl<'a> Write for FileStore<'a> {
+impl Write for FileStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
-        // I'd prefer to use a LineWriter - https://doc.rust-lang.org/std/io/struct.LineWriter.html
-        // But need to figure out how to expose this nicely in the Store interface
-        // Maybe the same as BufReader where it's not exposed, but an implementation detail?
         let s = self.file.write(buf)?;
         self.file.unlock()?;
 
@@ -114,24 +125,27 @@ impl<'a> Write for FileStore<'a> {
     }
 }
 
-impl<'a> Read for FileStore<'a> {
+impl Read for FileStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        self.file.lock_exclusive()?;
-        let s = self.file.read(buf)?;
-        self.file.unlock()?;
-        Ok(s)
+        self.inner.read(buf)
     }
 }
 
-impl<'a> BufRead for FileStore<'a> {
+// Inspiration - https://doc.rust-lang.org/src/std/io/stdio.rs.html#546
+impl BufRead for FileStore {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        self.file.lock_exclusive()?;
-        let r = self.br.fill_buf();
-        self.file.unlock()?;
-        r
+        self.inner.fill_buf()
     }
 
     fn consume(&mut self, amt: usize) {
-        self.br.consume(amt)
+        self.inner.consume(amt)
+    }
+
+    fn read_until(&mut self, byte: u8, buf: &mut Vec<u8>) -> std::io::Result<usize> {
+        self.inner.read_until(byte, buf)
+    }
+
+    fn read_line(&mut self, buf: &mut String) -> std::io::Result<usize> {
+        self.inner.read_line(buf)
     }
 }
