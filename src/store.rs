@@ -1,10 +1,10 @@
 use fs2::FileExt;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Error, Read, Write};
+use std::io::{BufRead, BufReader, Error, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 // std::io::{Read,Write} Supertrait
-pub trait Store: Write + Read + BufRead {}
+pub trait Store: Write + Read + BufRead + Seek {}
 
 #[derive(Debug)]
 pub struct MemoryStore {
@@ -68,6 +68,13 @@ impl BufRead for MemoryStore {
 
     fn consume(&mut self, amt: usize) {
         self.position += amt;
+    }
+}
+
+// TODO: is there a better way?
+impl Seek for MemoryStore {
+    fn seek(&mut self, _pos: SeekFrom) -> std::io::Result<u64> {
+        Ok(0)
     }
 }
 
@@ -147,5 +154,12 @@ impl BufRead for FileStore {
 
     fn read_line(&mut self, buf: &mut String) -> std::io::Result<usize> {
         self.inner.read_line(buf)
+    }
+}
+
+impl Seek for FileStore {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)?;
+        self.inner.seek(pos)
     }
 }

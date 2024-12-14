@@ -155,8 +155,11 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            let mut seen = Vec::<u32>::new();
+            // Make sure we reset the file offset
+            // TODO: this makes no sense for stores that are NOT file-based (maybe)
+            node.store.rewind()?;
 
+            let mut seen = Vec::<u32>::new();
             let lines = node.store.lines();
             for line in lines {
                 let v: u32 = line.expect("failed to extract line").parse()?;

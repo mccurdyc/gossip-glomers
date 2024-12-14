@@ -9,6 +9,7 @@ fn main() {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
+    // TODO: I feel like it's an issue reading the file?
     let p = Path::new("./store.txt");
     let mut s = store::FileStore::new(p).expect("failed to create store");
     let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
