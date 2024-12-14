@@ -60,12 +60,11 @@ impl<'a, S: store::Store> Node<'a, S> {
 
         for line in reader.lines() {
             if let Ok(l) = line {
-                info!("line: {:?}", l);
+                info!(">> input: {:?}", l);
 
                 // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
                 // from_reader will read to end of deserialized object
                 let msg: Message = serde_json::from_str(&l)?;
-                info!(">> input: {:?}", msg);
 
                 match msg {
                     Message::Init(init::Payload { src, dest, body }) => {
