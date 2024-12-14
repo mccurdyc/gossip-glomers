@@ -11,3 +11,16 @@ test *TEST:
 
 lint:
     cargo clippy
+
+build challenge:
+    cargo build --bin {{ challenge }} --release
+
+maelstrom-run challenge:
+    just "maelstrom-run-{{ challenge }}"
+
+maelstrom-run-broadcast:
+    just build broadcast
+    java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ./target/release/broadcast --node-count 1 --time-limit 20 --rate 10
+
+maelstrom-serve:
+    java -Djava.awt.headless=true -jar "./maelstrom.jar" serve
