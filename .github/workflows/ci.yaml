@@ -15,10 +15,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Just
-        uses: apt update && apt install -y just
+        run: apt update && apt install -y just
 
       - name: Build and Push CI image
-        uses: just docker-push
+        run: just docker-push
 
   main:
     runs-on: ubuntu-latest
