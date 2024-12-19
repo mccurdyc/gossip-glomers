@@ -2,9 +2,20 @@ name: CI
 on:
   push:
     branches: [ main ]
+
+# Cancel previous CI runs
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true # If this is enabled it will cancel current running and start latest
+
 jobs:
   build-ci-image:
     runs-on: ubuntu-latest
+
+    concurrency:
+      group: build-ci-image-first
+      cancel-in-progress: true # If this is enabled it will cancel current running and start latest
+
     defaults:
       run:
         shell: bash
@@ -24,6 +35,11 @@ jobs:
 
   main:
     runs-on: ubuntu-latest
+
+    concurrency:
+      group: build-ci-image-first
+      cancel-in-progress: false # Don't cancel b/c it's the job building the image
+
     defaults:
       run:
         shell: bash
