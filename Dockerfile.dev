@@ -22,7 +22,7 @@ WORKDIR /src
 RUN nix build .#just  && cp -v result/bin/just /usr/bin/just
 RUN nix build .#rustc && cp -v result/bin/rustc /usr/bin/rustc
 RUN nix build .#cargo && cp -v result/bin/cargo /usr/bin/cargo
-RUN nix build .#clippy && cp -v result/bin/cargo-clippy /usr/bin/cargo-clippy
+RUN nix build .#clippy && cp -v result/bin/cargo-clippy /usr/bin/cargo-clippy && cp -v result/bin/clippy-driver /usr/bin/clippy-driver
 RUN nix build .#rustfmt && cp -v result/bin/rustfmt /usr/bin/rustfmt
 RUN nix build .#jdk23_headless && cp -v result/bin/java /usr/bin/java
 RUN nix build .#gnuplot && cp -v result/bin/gnuplot /usr/bin/gnuplot
