@@ -57,6 +57,8 @@
           rustPlatform = pkgs.makeRustPlatform {
             cargo = pinnedRust;
             rustc = pinnedRust;
+            rustfmt = pinnedRust;
+            clippy = pinnedRust;
           };
 
           maelstromDeps = with pkgs; [
@@ -72,7 +74,7 @@
             # Nix
             nix-fmt = pkgs.nixpkgs-fmt;
 
-            inherit (pkgs) cargo rustc jdk23_headless gnuplot git; # is there a way to DRY this up? Could list flatten, etc.
+            inherit (pkgs) cargo rustc clippy rustfmt jdk23_headless gnuplot git; # is there a way to DRY this up? Could list flatten, etc.
 
             inherit (pkgs-unstable) just; # need just >1.33 for working-directory setting
           };
@@ -190,7 +192,8 @@
           };
 
           packages = {
-            inherit (ci_packages) just cargo rustc nix-fmt jdk23_headless gnuplot git; # not sure why maelstrom needs git
+            # Proxy these to be able to be version in the docker image
+            inherit (ci_packages) just cargo rustc clippy rustfmt nix-fmt jdk23_headless gnuplot git; # not sure why maelstrom needs git
 
             # nix build '.#echo'
             # nix run '.#echo'
