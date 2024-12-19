@@ -1,0 +1,37 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./
+
+    container:
+      image: coltonmccurdy/gossip:latest
+
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+
+      - name: lint
+        run: just lint
+
+      - name: test
+        run: just test
+
+      - name: maelstrom-test-echo
+        run: just maelstrom-run echo
+
+      - name: maelstrom-test-unique
+        run: just maelstrom-run unique
+
+      - name: maelstrom-test-broadcast
+        run: just maelstrom-run broadcast
+
+      - name: maelstrom-test-counter
+        run: just maelstrom-run counter
+

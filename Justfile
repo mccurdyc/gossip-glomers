@@ -1,9 +1,23 @@
 #!/usr/bin/env -S just --justfile
 # ^ A shebang isn't required, but allows a justfile to be executed
 #   like a script, with `./justfile test`, for example.
+#
+# Just Manual - https://just.systems/man/en/
+# https://just.systems/man/en/working-directory.html
+# Settings - https://just.systems/man/en/settings.html
+# https://just.systems/man/en/settings.html#bash
+
+set shell := ["/usr/bin/env", "bash", "-uc"]
 
 log := "warn"
 export JUST_LOG := log
+
+set quiet := false
+
+shebang := "/usr/bin/env bash"
+docker_image := "coltonmccurdy/gossip"
+maelstrom_cmd := 'java -Djava.awt.headless=true -jar "./maelstrom.jar" test'
+maelstrom_test_cmd := maelstrom_cmd + " test"
 
 # Variadic argument - https://just.systems/man/en/recipe-parameters.html
 test *TEST:
@@ -12,15 +26,55 @@ test *TEST:
 lint:
     cargo clippy
 
+docker-build:
+    docker build \
+      -f Dockerfile.dev \
+      -t {{ docker_image }}:latest \
+      .
+
+docker-push: docker-build
+    docker push {{ docker_image }}:latest
+
 build challenge:
     cargo build --bin {{ challenge }} --release
 
 maelstrom-run challenge:
+    just build {{ challenge }}
     just "maelstrom-run-{{ challenge }}"
 
+maelstrom-run-echo:
+    {{ maelstrom_test_cmd }} \
+      -w echo \
+      --bin ./target/release/echo \
+      --node-count 1 \
+      --time-limit 10
+
+maelstrom-run-unique:
+    {{ maelstrom_test_cmd }} \
+      -w unique-ids \
+      --bin ./target/release/unique \
+      --time-limit 30 \
+      --rate 1000 \
+      --node-count 3 \
+      --availability total \
+      --nemesis partition
+
 maelstrom-run-broadcast:
-    just build broadcast
-    java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w broadcast --bin ./target/release/broadcast --node-count 1 --time-limit 20 --rate 10
+    {{ maelstrom_test_cmd }} \
+      -w broadcast \
+      --bin ./target/release/broadcast \
+      --node-count 1 \
+      --time-limit 20 \
+      --rate 10
+
+maelstrom-run-counter:
+    {{ maelstrom_test_cmd }} \
+      -w counter \
+      --bin ./target/release/counter \
+      --node-count 3 \
+      --time-limit 20 \
+      --rate 100 \
+      --nemesis partition
 
 maelstrom-serve:
-    java -Djava.awt.headless=true -jar "./maelstrom.jar" serve
+    {{ maelstrom_cmd }} serve

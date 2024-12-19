@@ -61,12 +61,21 @@
 
           maelstromDeps = with pkgs; [
             breakpointHook # debugging - https://discourse.nixos.org/t/debug-a-failed-derivation-with-breakpointhook-and-cntr/8669
-            jdk22_headless
+            jdk23_headless
             gnuplot
             git # not sure why maelstrom needs this
           ];
 
           inherit (self.packages.${system}) echo unique broadcast counter;
+
+          ci_packages = {
+            # Nix
+            nix-fmt = pkgs.nixpkgs-fmt;
+
+            inherit (pkgs) cargo rustc jdk23_headless gnuplot git; # is there a way to DRY this up? Could list flatten, etc.
+
+            inherit (pkgs-unstable) just; # need just >1.33 for working-directory setting
+          };
         in
         {
           # This is needed for pkgs-unstable - https://github.com/hercules-ci/flake-parts/discussions/105
@@ -181,6 +190,8 @@
           };
 
           packages = {
+            inherit (ci_packages) just cargo rustc nix-fmt jdk23_headless gnuplot git; # not sure why maelstrom needs git
+
             # nix build '.#echo'
             # nix run '.#echo'
             echo = rustPlatform.buildRustPackage {
@@ -261,7 +272,7 @@
               pkgs.rust-analyzer
 
               # Maelstrom
-              pkgs.jdk22_headless
+              pkgs.jdk23_headless
               pkgs.gnuplot
             ];
           };
