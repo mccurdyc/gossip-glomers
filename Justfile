@@ -69,7 +69,7 @@ maelstrom-run-broadcast:
 
 maelstrom-run-counter:
     {{ maelstrom_test_cmd }} \
-      -w counter \
+      -w g-counter \
       --bin ./target/release/counter \
       --node-count 3 \
       --time-limit 20 \
