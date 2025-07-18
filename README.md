@@ -5,8 +5,10 @@
 1. I've been wanted to write Rust again.
 1. I knew I wanted to do something distributed-systems related.
 1. I figured I'd actually implement https://github.com/mccurdyc/lodiseval in Rust
+
  - But I figured I'd need a better starting place to first re-learn the basics --- with some hand-holding --- of Rust before trying
  to solve an actual problem. That's when I came across [Jon Gjengset's recorded stream](https://youtu.be/gboGyccRVXI?si=h51BZDIr1LPFWxFU).
+
 1. Then I realized that lodiseval is actually kind of a re-implementation of [maelstrom](https://github.com/jepsen-io/maelstrom) so the Gossip Glomers
 challenge was perfect. Everything kind of came full-circle because Jepsen was partially an inspiration for the lodiseval concept in the first place.
 
@@ -27,7 +29,7 @@ I am using this as the first implementation of what I will end up codifying in m
 docker run -it echo
 ```
 
-## Maelstrom
+## Run a Maelstrom Test
 
 ```bash
 nix build '.#checks.x86_64-linux.echo' --print-build-logs --keep-failed
