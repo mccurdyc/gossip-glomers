@@ -33,6 +33,9 @@ docker run -it echo
 
 ```bash
 nix build '.#checks.x86_64-linux.echo' --print-build-logs --keep-failed
+nix build '.#checks.x86_64-linux.unique' --print-build-logs --keep-failed
+nix build '.#checks.x86_64-linux.broadcast' --print-build-logs --keep-failed
+nix build '.#checks.x86_64-linux.counter' --print-build-logs --keep-failed
 ```
 
 ### Debugging Failures
