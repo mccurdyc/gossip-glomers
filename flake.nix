@@ -57,7 +57,7 @@
           git # not sure why maelstrom needs this
         ];
 
-        inherit (self.packages.${system}) echo unique broadcast counter;
+        inherit (self.packages.${system}) echo unique broadcast counter replicated-log;
 
         ci_packages = {
           # Nix
