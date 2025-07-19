@@ -9,8 +9,6 @@
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
     flake-utils.url = "github:numtide/flake-utils";
 
-    systems.url = "github:nix-systems/x86_64-linux";
-
     # For a pure binary installation of the Rust toolchain
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
