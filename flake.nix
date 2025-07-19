@@ -233,6 +233,19 @@
             # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
             doInstallCheck = false; # disable so that these can be built independently
           };
+
+          # nix build '.#replicated-log'
+          # nix run '.#replicated-log'
+          replicated-log = rustPlatform.buildRustPackage {
+            pname = "replicated-log";
+            version = "1.0.0";
+            src = pkgs.lib.cleanSource ./.; # the folder with the cargo.toml
+            cargoLock.lockFile = ./Cargo.lock;
+            cargoBuildFlags = [ "--bin" "replicated-log" ];
+            doCheck = false; # disable so that these can be built independently
+            # https://nixos.org/manual/nixpkgs/stable/#ssec-installCheck-phase
+            doInstallCheck = false; # disable so that these can be built independently
+          };
         };
 
         devShells.default = pkgs.mkShell {

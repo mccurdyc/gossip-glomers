@@ -119,7 +119,7 @@ impl Write for FileStore {
     fn write_all(&mut self, buf: &[u8]) -> Result<(), Error> {
         self.file.lock_exclusive()?;
         self.file.write_all(buf)?;
-        self.file.unlock()?;
+        fs2::FileExt::unlock(&self.file)?;
 
         Ok(())
     }
@@ -127,7 +127,7 @@ impl Write for FileStore {
     fn flush(&mut self) -> Result<(), Error> {
         self.file.lock_exclusive()?;
         self.file.flush()?;
-        self.file.unlock()?;
+        fs2::FileExt::unlock(&self.file)?;
         Ok(())
     }
 }
