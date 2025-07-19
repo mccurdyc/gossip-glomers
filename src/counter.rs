@@ -2,7 +2,7 @@ use crate::{config, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, SeekFrom, Write};
 use tracing::info;
 
 // Goals(s):
@@ -104,10 +104,12 @@ where
     match msg {
         Message::Add(AddPayload { src, dest, body }) => {
             let mut buf = [0u8; 4];
+            node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
 
-            let o = u32::from_le_bytes(buf);
-            let new = o + body.delta;
+            let old = u32::from_le_bytes(buf);
+            let new = old + body.delta;
+            node.store.seek(SeekFrom::Start(0))?;
             node.store.write_all(&new.to_le_bytes())?;
 
             let resp = AddResp {
@@ -125,11 +127,10 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
-            // TODO: sum needs to use the old value instead of always summing zero.
-            let mut sum: u32 = 0;
             let mut buf = [0u8; 4];
+            node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
-            sum += u32::from_le_bytes(buf);
+            let v = u32::from_le_bytes(buf);
 
             let resp = ReadResp {
                 src: dest,
@@ -137,7 +138,7 @@ where
                 body: ReadRespBody {
                     typ: "read_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    value: sum,
+                    value: v,
                 },
             };
 

@@ -159,14 +159,9 @@ impl BufRead for FileStore {
 
 impl Seek for FileStore {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        // The position used for seeking with <code>[SeekFrom::Current]\(_)</code> is the
-        // position the underlying reader would be at if the `BufReader<R>` had no
-        // internal buffer.
-        //
-        // Basically, this essentially calls self.file.seek(pos) ALSO.
-        //
-        // Seeking always discards the internal buffer, even if the seek position
-        // would otherwise fall within it.
+        // seeks the file cursor for writing
+        self.file.seek(pos)?;
+        // seeks the read cursor
         self.inner.seek(pos)
     }
 }
