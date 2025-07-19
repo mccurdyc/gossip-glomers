@@ -2,7 +2,7 @@
 
 ## Project Inspiration
 
-1. I've been wanted to write Rust again.
+1. I've been wanting to write Rust again.
 1. I knew I wanted to do something distributed-systems related.
 1. I figured I'd actually implement https://github.com/mccurdyc/lodiseval in Rust
 

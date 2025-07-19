@@ -54,7 +54,7 @@ struct ReadPayload {
 #[derive(Serialize, Deserialize, Debug)]
 struct ReadReqBody {
     #[serde(rename = "type")]
-    typ: String, //
+    typ: String,
     msg_id: u32,
 }
 
@@ -103,16 +103,12 @@ where
     info!(">> input: {:?}", msg);
     match msg {
         Message::Add(AddPayload { src, dest, body }) => {
-            let old: &mut [u8] = &mut [];
-            let _ = node.store.read(old)?;
+            let mut buf = [0u8; 4];
+            let _ = node.store.read(&mut buf)?;
 
-            if let Ok(v) = old.try_into() {
-                let o = u32::from_ne_bytes(v);
-                let new = o + body.delta;
-                let b: [u8; 4] = new.to_ne_bytes();
-                let b_slice: &[u8] = &b;
-                node.store.write_all(b_slice)?;
-            }
+            let o = u32::from_le_bytes(buf);
+            let new = o + body.delta;
+            node.store.write_all(&new.to_le_bytes())?;
 
             let resp = AddResp {
                 src: dest,
@@ -129,12 +125,11 @@ where
             writer.write_all(resp_str.as_bytes())?;
         }
         Message::Read(ReadPayload { src, dest, body }) => {
+            // TODO: sum needs to use the old value instead of always summing zero.
             let mut sum: u32 = 0;
-
-            for line in (&mut node.store).lines() {
-                let d: u32 = line?.parse()?;
-                sum += d
-            }
+            let mut buf = [0u8; 4];
+            let _ = node.store.read(&mut buf)?;
+            sum += u32::from_le_bytes(buf);
 
             let resp = ReadResp {
                 src: dest,

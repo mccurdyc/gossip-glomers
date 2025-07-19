@@ -111,7 +111,7 @@ impl Write for FileStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let s = self.file.write(buf)?;
-        self.file.unlock()?;
+        fs2::FileExt::unlock(&self.file)?;
 
         Ok(s)
     }
