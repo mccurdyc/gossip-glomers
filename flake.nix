@@ -178,6 +178,22 @@
               mkdir -p $out # required by derivations even though it's empty
             '';
           };
+
+          # https://github.com/NixOS/nix/issues/8881
+          # nix build '.#checks.x86_64-linux.replicated-log' --print-build-logs --keep-failed
+          # --keep-failed writes the sandbox directory at /tmp/nix-build-.../build/<hash>-source/
+          # We use `nix build` instead of `nix run` because the check doesn't produce an executable to run.
+          # We use mkDerivation instead of runCommand because we need to set `src`.
+          replicated-log = pkgs.stdenvNoCC.mkDerivation {
+            name = "maelstrom-replicated-log";
+            src = ./.;
+            nativeBuildInputs = maelstromDeps ++ [ replicated-log ];
+            buildPhase = ''
+              echo "===> running 'maelstrom replicated-log' tests"
+              java -Djava.awt.headless=true -jar "./maelstrom.jar" test -w kafka --bin ${replicated-log}/bin/replicated-log --node-count 1 --concurrency 2n --time-limit 20 --rate 1000
+              mkdir -p $out # required by derivations even though it's empty
+            '';
+          };
         };
 
         packages = {
