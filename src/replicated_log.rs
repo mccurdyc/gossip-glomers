@@ -8,70 +8,64 @@ use tracing::info;
 // Goals(s):
 // https://github.com/jepsen-io/maelstrom/blob/main/doc/workloads.md#workload-kafka
 
+// Generic payload wrapper for all message types
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
-struct SendPayload {
+struct Payload<T> {
     src: String,
     dest: String,
-    body: SendReqBody,
+    body: T,
 }
 
+// Generic request body with common fields
 #[derive(Serialize, Deserialize, Debug)]
-struct SendReqBody {
+struct RequestBody<T> {
     #[serde(rename = "type")]
-    typ: String, //
+    typ: String,
     msg_id: u32,
+    #[serde(flatten)]
+    data: T,
+}
+
+// Generic response body with common fields
+#[derive(Serialize, Deserialize, Debug)]
+struct ResponseBody<T> {
+    #[serde(rename = "type")]
+    typ: String,
+    in_reply_to: u32,
+    #[serde(flatten)]
+    data: T,
+}
+
+// Send-specific data structures
+#[derive(Serialize, Deserialize, Debug)]
+struct SendData {
     key: String,
     msg: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct SendResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: SendRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct SendRespBody {
-    #[serde(rename = "type")]
-    typ: String, // send_ok
-    in_reply_to: u32,
+struct SendResponseData {
     offset: HashMap<String, u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct PollPayload {
-    src: String,
-    dest: String,
-    body: PollReqBody,
-}
+// Type aliases for cleaner usage
+type SendPayload = Payload<RequestBody<SendData>>;
+type SendResp = Payload<ResponseBody<SendResponseData>>;
 
+// Poll-specific data structures
 #[derive(Serialize, Deserialize, Debug)]
-struct PollReqBody {
-    #[serde(rename = "type")]
-    typ: String,
-    msg_id: u32,
+struct PollData {
     offsets: HashMap<String, u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct PollResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: PollRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct PollRespBody {
-    #[serde(rename = "type")]
-    typ: String, // poll_ok
-    in_reply_to: u32,
+struct PollResponseData {
     msgs: HashMap<String, Queue>,
 }
+
+type PollPayload = Payload<RequestBody<PollData>>;
+type PollResp = Payload<ResponseBody<PollResponseData>>;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Queue {
@@ -79,67 +73,31 @@ struct Queue {
     len: u32,
 }
 
+// Commit-specific data structures
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct CommitPayload {
-    src: String,
-    dest: String,
-    body: CommitReqBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct CommitReqBody {
-    #[serde(rename = "type")]
-    typ: String,
-    msg_id: u32,
+struct CommitData {
     offsets: HashMap<String, u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct CommitResp {
-    src: String,
-    dest: String,
-    body: CommitRespBody,
-}
+struct EmptyData {}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct CommitRespBody {
-    #[serde(rename = "type")]
-    typ: String, // commit_offsets_ok
-    in_reply_to: u32,
-}
+type CommitPayload = Payload<RequestBody<CommitData>>;
+type CommitResp = Payload<ResponseBody<EmptyData>>;
 
+// ListCommitted-specific data structures
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct ListCommittedPayload {
-    src: String,
-    dest: String,
-    body: ListCommittedReqBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ListCommittedReqBody {
-    #[serde(rename = "type")]
-    typ: String,
-    msg_id: u32,
+struct ListCommittedData {
     keys: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ListCommittedOffsetsResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: ListCommittedOffsetsRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ListCommittedOffsetsRespBody {
-    #[serde(rename = "type")]
-    typ: String, // list_committed_offsets_ok
-    in_reply_to: u32,
+struct ListCommittedResponseData {
     offsets: HashMap<String, u32>,
 }
+
+type ListCommittedPayload = Payload<RequestBody<ListCommittedData>>;
+type ListCommittedOffsetsResp = Payload<ResponseBody<ListCommittedResponseData>>;
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
@@ -177,10 +135,12 @@ where
             let resp = SendResp {
                 src: dest,
                 dest: src,
-                body: SendRespBody {
+                body: ResponseBody {
                     typ: "send_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    offset: HashMap::new(),
+                    data: SendResponseData {
+                        offset: HashMap::new(),
+                    },
                 },
             };
 
@@ -195,10 +155,12 @@ where
             let resp = PollResp {
                 src: dest,
                 dest: src,
-                body: PollRespBody {
+                body: ResponseBody {
                     typ: "poll_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    msgs: HashMap::new(),
+                    data: PollResponseData {
+                        msgs: HashMap::new(),
+                    },
                 },
             };
 
@@ -213,9 +175,10 @@ where
             let resp = CommitResp {
                 src: dest,
                 dest: src,
-                body: CommitRespBody {
+                body: ResponseBody {
                     typ: "commit_offsets_ok".to_string(),
                     in_reply_to: body.msg_id,
+                    data: EmptyData {},
                 },
             };
 
@@ -230,10 +193,12 @@ where
             let resp = ListCommittedOffsetsResp {
                 src: dest,
                 dest: src,
-                body: ListCommittedOffsetsRespBody {
+                body: ResponseBody {
                     typ: "list_committed_offsets_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    offsets: HashMap::new(),
+                    data: ListCommittedResponseData {
+                        offsets: HashMap::new(),
+                    },
                 },
             };
 
@@ -245,6 +210,6 @@ where
         Message::Other(m) => {
             info!("other: {:?}", m);
         }
-    };
+    }
     Ok(())
 }
