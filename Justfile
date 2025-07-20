@@ -76,5 +76,14 @@ maelstrom-run-counter:
       --rate 100 \
       --nemesis partition
 
+maelstrom-run-replicated-log:
+    {{ maelstrom_test_cmd }} \
+      -w kafka \
+      --bin ./target/release/replicated-log \
+      --node-count 1 \
+      --concurrency 2n \
+      --time-limit 20 \
+      --rate 100
+
 maelstrom-serve:
     {{ maelstrom_cmd }} serve
