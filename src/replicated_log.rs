@@ -7,6 +7,16 @@ use tracing::info;
 
 // Goals(s):
 // https://github.com/jepsen-io/maelstrom/blob/main/doc/workloads.md#workload-kafka
+// - store an append-only log in order
+// - Each log is identified by a string key (e.g. "k1")
+// - these logs contain a series of messages which are identified by an integer offset.
+// - These offsets can be sparse in that not every offset must contain a message.
+// - There are no recency requirements so acknowledged send messages do not need to return in poll messages immediately.
+//   - No time requirements
+//
+// Maelstrom is checking for:
+// - Lost writes: for example, a client sees offset 10 but not offset 5.
+// - Monotonic increasing offsets: an offset for a log should always be increasing.
 
 // Generic payload wrapper for all message types
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,6 +46,15 @@ struct ResponseBody<T> {
     #[serde(flatten)]
     data: T,
 }
+
+// Send-specific data structures
+#[derive(Serialize, Deserialize, Debug)]
+struct TopologyData {
+    topology: HashMap<String, Vec<String>>,
+}
+
+// Type aliases for cleaner usage
+type TopologyPayload = Payload<RequestBody<TopologyData>>;
 
 // Send-specific data structures
 #[derive(Serialize, Deserialize, Debug)]
@@ -105,6 +124,7 @@ type ListCommittedOffsetsResp = Payload<ResponseBody<ListCommittedResponseData>>
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Message {
+    Topology(TopologyPayload),
     Send(SendPayload),
     Poll(PollPayload),
     Commit(CommitPayload),
@@ -130,8 +150,6 @@ where
     info!(">> input: {:?}", msg);
     match msg {
         Message::Send(SendPayload { src, dest, body }) => {
-            panic!("not implemented");
-
             let resp = SendResp {
                 src: dest,
                 dest: src,
@@ -139,6 +157,10 @@ where
                     typ: "send_ok".to_string(),
                     in_reply_to: body.msg_id,
                     data: SendResponseData {
+                        // TODO: appears this is supposed to be just an int with the offset
+                        // doesn't need to be keyed.
+                        //
+                        // Poll is when we need to remember the message key.
                         offset: HashMap::new(),
                     },
                 },
