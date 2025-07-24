@@ -67,6 +67,14 @@ maelstrom-run-broadcast:
       --time-limit 20 \
       --rate 10
 
+maelstrom-run-broadcast-multi:
+    {{ maelstrom_test_cmd }} \
+      -w broadcast \
+      --bin ./target/release/broadcast \
+      --node-count 5 \
+      --time-limit 20 \
+      --rate 10
+
 maelstrom-run-counter:
     {{ maelstrom_test_cmd }} \
       -w g-counter \
