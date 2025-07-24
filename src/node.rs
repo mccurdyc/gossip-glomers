@@ -1,17 +1,20 @@
 use crate::{config, init, node, store};
 use anyhow::Result;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, Cursor, Write};
 use tracing::{error, info};
 
 #[derive(Debug)]
-pub struct Node<'a, S: store::Store> {
-    #[allow(dead_code)]
-    id: String, // include it as the src of any message it sends.
-    #[allow(dead_code)]
-    node_ids: Vec<String>,
+pub struct Metadata {
+    priority: u8,
+}
 
+#[derive(Debug)]
+pub struct Node<'a, S: store::Store> {
+    id: String, // include it as the src of any message it sends.
+    pub neighborhood: HashMap<String, Metadata>,
     pub store: &'a mut S,
 }
 
@@ -29,7 +32,7 @@ impl<'a, S: store::Store> Node<'a, S> {
     {
         Self {
             id: std::default::Default::default(),
-            node_ids: std::default::Default::default(),
+            neighborhood: std::default::Default::default(),
             store: s,
         }
     }
@@ -39,7 +42,25 @@ impl<'a, S: store::Store> Node<'a, S> {
         S: store::Store,
     {
         self.id = node_id;
-        self.node_ids = node_ids;
+        self.neighborhood = HashMap::new();
+
+        for n in node_ids {
+            if n == self.id {
+                continue;
+            }
+
+            // let's pretend (for now, just use a random number generator)
+            // the init message included weights
+            // Then, let's use those weights to choose a neighborhood
+            let priority: u8 = rand::random_range(0..=100);
+            // NOTE: We don't filter the neighborhood here because filtering where
+            // messages go will be up to the send/response implementation.
+            // In other words, there may be cases where we want to send a message
+            // to everyone and other places where we want to be selective.
+            self.neighborhood.insert(n, Metadata { priority });
+            // Would be nice to have a sorted list of neighbors that messages should
+            // be sent to or a filtered list.
+        }
     }
 
     pub fn run<R, W, F, T>(
@@ -68,8 +89,6 @@ impl<'a, S: store::Store> Node<'a, S> {
 
                 match msg {
                     Message::Init(init::Payload { src, dest, body }) => {
-                        // If the message is an Init message, we need to actually configure
-                        // the node object above.
                         self.init(body.node_id, body.node_ids);
                         let resp = init::Resp {
                             src: dest,
