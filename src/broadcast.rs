@@ -12,100 +12,71 @@ use tracing::info;
 // Data can be stored in-memory as node processes are not killed by Maelstrom.
 // - It should store the "message" value locally so it can be read later. When a "read"
 // request is sent.
+//
+// - Your node should propagate values it sees from broadcast messages to the other nodes in the cluster
+// - It can use the topology passed to your node in the topology message or you can build your own topology.
+//
+// The 63% Rule
+// In epidemic spreading models, once approximately 63% of susceptible nodes have been "infected" (received the message), there's a very high probability the epidemic will reach essentially 100% coverage.
+// 50-70% initial coverage for reliable full propagation
+// Fanout of 3-5 nodes per gossip round
+// Log(N) rounds to reach full coverage (where N = total nodes)
+
+// Generic payload wrapper for all message types
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
-struct BroadcastPayload {
+struct Payload<T> {
     src: String,
     dest: String,
-    body: BroadcastReqBody,
+    body: T,
 }
 
+// Generic request body with common fields
 #[derive(Serialize, Deserialize, Debug)]
-struct BroadcastReqBody {
+struct RequestBody<T> {
     #[serde(rename = "type")]
-    typ: String, // broadcast
+    typ: String,
     msg_id: u32,
-    message: u32, // will be unique
+    #[serde(flatten)]
+    data: Option<T>,
 }
 
+// Generic response body with common fields
 #[derive(Serialize, Deserialize, Debug)]
-struct BroadcastResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: BroadcastRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct BroadcastRespBody {
+struct ResponseBody<T> {
     #[serde(rename = "type")]
-    typ: String, // broadcast_ok
+    typ: String,
     in_reply_to: u32,
+    #[serde(flatten)]
+    data: Option<T>,
+}
+
+// Send-specific data structures
+#[derive(Serialize, Deserialize, Debug)]
+struct TopologyData {
+    topology: HashMap<String, Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct ReadPayload {
-    src: String,
-    dest: String,
-    body: ReadReqBody,
+struct BroadcastReqData {
+    message: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ReadReqBody {
-    #[serde(rename = "type")]
-    typ: String, // read
+struct ReadReqData {
     msg_id: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ReadResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: ReadRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ReadRespBody {
-    #[serde(rename = "type")]
-    typ: String, // read_ok
-    in_reply_to: u32,
+struct ReadRespData {
     messages: Vec<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct TopologyPayload {
-    src: String,
-    dest: String,
-    body: TopologyReqBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct TopologyReqBody {
-    #[serde(rename = "type")]
-    typ: String, // topology
-    msg_id: u32,
-    topology: Topology,
-}
-
-type Topology = HashMap<String, Vec<String>>;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct TopologyResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: TopologyRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct TopologyRespBody {
-    #[serde(rename = "type")]
-    typ: String, // topology_ok
-    in_reply_to: u32,
-}
+// Type aliases for cleaner usage
+type TopologyPayload = Payload<RequestBody<TopologyData>>;
+type BroadcastReqPayload = Payload<RequestBody<BroadcastReqData>>;
+type ReadReqPayload = Payload<RequestBody<ReadReqData>>;
+type ReadRespPayload = Payload<ResponseBody<ReadRespData>>;
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
@@ -113,10 +84,9 @@ struct TopologyRespBody {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Message {
-    Broadcast(BroadcastPayload),
     Topology(TopologyPayload),
-    // CRITICAL: read has to come AFTER topology because the message is less specific
-    Read(ReadPayload),
+    Broadcast(BroadcastReqPayload),
+    Read(ReadReqPayload),
     Other(HashMap<String, serde_json::Value>),
 }
 
@@ -136,16 +106,36 @@ where
     // from_reader will read to end of deserialized object
     let msg: Message = serde_json::from_reader(reader)?;
     match msg {
-        Message::Broadcast(BroadcastPayload { src, dest, body }) => {
-            serde_json::ser::to_writer(&mut node.store, &body.message)?;
-            node.store.write_all(b"\n")?;
-
-            let resp = BroadcastResp {
+        Message::Topology(TopologyPayload { src, dest, body }) => {
+            // TODO: right now we do nothing here
+            let resp = Payload {
                 src: dest,
                 dest: src,
-                body: BroadcastRespBody {
+                body: ResponseBody::<()> {
+                    typ: "topology_ok".to_string(),
+                    in_reply_to: body.msg_id,
+                    data: None,
+                },
+            };
+            let mut resp_str = serde_json::to_string(&resp)?;
+            resp_str.push('\n');
+            info!("<< output: {:?}", &resp_str);
+            writer.write_all(resp_str.as_bytes())?;
+        }
+        Message::Broadcast(BroadcastReqPayload { src, dest, body }) => {
+            serde_json::ser::to_writer(
+                &mut node.store,
+                &body.data.ok_or("failed").unwrap().message,
+            )?;
+            node.store.write_all(b"\n")?;
+
+            let resp = Payload {
+                src: dest,
+                dest: src,
+                body: ResponseBody::<()> {
                     typ: "broadcast_ok".to_string(),
                     in_reply_to: body.msg_id,
+                    data: None,
                 },
             };
 
@@ -154,7 +144,7 @@ where
             info!("<< output: {:?}", &resp_str);
             writer.write_all(resp_str.as_bytes())?;
         }
-        Message::Read(ReadPayload { src, dest, body }) => {
+        Message::Read(ReadReqPayload { src, dest, body }) => {
             // Make sure we reset the file offset
             // TODO: this makes no sense for stores that are NOT file-based (maybe)
             node.store.rewind()?;
@@ -166,31 +156,16 @@ where
                 seen.push(v);
             }
 
-            let resp = ReadResp {
+            let resp = Payload {
                 src: dest,
                 dest: src,
-                body: ReadRespBody {
+                body: ResponseBody {
                     typ: "read_ok".to_string(),
                     in_reply_to: body.msg_id,
-                    messages: seen,
+                    data: Some(ReadRespData { messages: seen }),
                 },
             };
 
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
-        }
-        Message::Topology(TopologyPayload { src, dest, body }) => {
-            // TODO: right now we do nothing here
-            let resp = TopologyResp {
-                src: dest,
-                dest: src,
-                body: TopologyRespBody {
-                    typ: "topology_ok".to_string(),
-                    in_reply_to: body.msg_id,
-                },
-            };
             let mut resp_str = serde_json::to_string(&resp)?;
             resp_str.push('\n');
             info!("<< output: {:?}", &resp_str);

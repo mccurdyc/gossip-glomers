@@ -95,3 +95,7 @@ If we negate these two statements to guarantee spread of information we get the 
 
 - travel or move between neighborhoods often
 - try to accept as many messages as possible (don't deny messages)
+
+# Implementation
+
+1. Consume the Topology message; don't consume the proposed topology, just the full list of nodes in the network
