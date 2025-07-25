@@ -1,4 +1,4 @@
-use crate::{config, node, store};
+use crate::{config, io, node, payload, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,35 +22,6 @@ use tracing::info;
 // Fanout of 3-5 nodes per gossip round
 // Log(N) rounds to reach full coverage (where N = total nodes)
 
-// Generic payload wrapper for all message types
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct Payload<T> {
-    src: String,
-    dest: String,
-    body: T,
-}
-
-// Generic request body with common fields
-#[derive(Serialize, Deserialize, Debug)]
-struct RequestBody<T> {
-    #[serde(rename = "type")]
-    typ: String,
-    msg_id: u32,
-    #[serde(flatten)]
-    data: Option<T>,
-}
-
-// Generic response body with common fields
-#[derive(Serialize, Deserialize, Debug)]
-struct ResponseBody<T> {
-    #[serde(rename = "type")]
-    typ: String,
-    in_reply_to: u32,
-    #[serde(flatten)]
-    data: Option<T>,
-}
-
 // Send-specific data structures
 #[derive(Serialize, Deserialize, Debug)]
 struct TopologyData {
@@ -73,10 +44,10 @@ struct ReadRespData {
 }
 
 // Type aliases for cleaner usage
-type TopologyPayload = Payload<RequestBody<TopologyData>>;
-type BroadcastReqPayload = Payload<RequestBody<BroadcastReqData>>;
-type ReadReqPayload = Payload<RequestBody<ReadReqData>>;
-type ReadRespPayload = Payload<ResponseBody<ReadRespData>>;
+type TopologyPayload = payload::Payload<payload::RequestBody<TopologyData>>;
+type BroadcastReqPayload = payload::Payload<payload::RequestBody<BroadcastReqData>>;
+type ReadReqPayload = payload::Payload<payload::RequestBody<ReadReqData>>;
+type ReadRespPayload = payload::Payload<payload::ResponseBody<ReadRespData>>;
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
@@ -87,7 +58,7 @@ enum Message {
     Topology(TopologyPayload),
     Broadcast(BroadcastReqPayload),
     Read(ReadReqPayload),
-    Other(HashMap<String, serde_json::Value>),
+    Other(payload::UnhandledMessage),
 }
 
 pub fn listen<R, W, T, S>(
@@ -107,48 +78,55 @@ where
     let msg: Message = serde_json::from_reader(reader)?;
     match msg {
         Message::Topology(TopologyPayload { src, dest, body }) => {
-            // TODO: right now we do nothing here
-            let resp = Payload {
-                src: dest,
-                dest: src,
-                body: ResponseBody::<()> {
-                    typ: "topology_ok".to_string(),
-                    in_reply_to: body.msg_id,
-                    data: None,
+            io::to_writer(
+                writer,
+                &payload::Payload {
+                    src: dest,
+                    dest: src,
+                    body: payload::ResponseBody::<()> {
+                        typ: "topology_ok".to_string(),
+                        in_reply_to: body.msg_id,
+                        data: None,
+                    },
                 },
-            };
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
+            );
         }
+
         Message::Broadcast(BroadcastReqPayload { src, dest, body }) => {
+            // TODO: needs to actually talk to other nodes via STDOUT and sending a Broadcast
+            // message
+            //
+            // "hotness" of a message
+
+            // Stores the message in the Store
             serde_json::ser::to_writer(
                 &mut node.store,
                 &body.data.ok_or("failed").unwrap().message,
             )?;
-            node.store.write_all(b"\n")?;
+            writeln!(node.store);
 
-            let resp = Payload {
-                src: dest,
-                dest: src,
-                body: ResponseBody::<()> {
-                    typ: "broadcast_ok".to_string(),
-                    in_reply_to: body.msg_id,
-                    data: None,
+            io::to_writer(
+                writer,
+                &payload::Payload {
+                    src: dest,
+                    dest: src,
+                    body: payload::ResponseBody::<()> {
+                        typ: "broadcast_ok".to_string(),
+                        in_reply_to: body.msg_id,
+                        data: None,
+                    },
                 },
-            };
-
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
+            )?;
         }
+
         Message::Read(ReadReqPayload { src, dest, body }) => {
             // Make sure we reset the file offset
             // TODO: this makes no sense for stores that are NOT file-based (maybe)
+            // TODO: this breaks the interface to the store. The store should not
+            // expose implementation details to consumers like this.
             node.store.rewind()?;
 
+            // Move this to the write; writes should do the heavy lifting, reads should be fast
             let mut seen = Vec::<u32>::new();
             let lines = node.store.lines();
             for line in lines {
@@ -156,21 +134,20 @@ where
                 seen.push(v);
             }
 
-            let resp = Payload {
-                src: dest,
-                dest: src,
-                body: ResponseBody {
-                    typ: "read_ok".to_string(),
-                    in_reply_to: body.msg_id,
-                    data: Some(ReadRespData { messages: seen }),
+            io::to_writer(
+                writer,
+                &payload::Payload {
+                    src: dest,
+                    dest: src,
+                    body: payload::ResponseBody {
+                        typ: "read_ok".to_string(),
+                        in_reply_to: body.msg_id,
+                        data: Some(ReadRespData { messages: seen }),
+                    },
                 },
-            };
-
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
+            )?;
         }
+
         Message::Other(m) => {
             info!("other: {:?}", m);
         }
