@@ -1,7 +1,7 @@
-use crate::{config, node, store};
+use crate::payload::{Payload, RequestBody, ResponseBody, UnhandledMessage};
+use crate::{config, io, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::io::{BufRead, SeekFrom, Write};
 use tracing::info;
 
@@ -12,77 +12,40 @@ use tracing::info;
 // Workload
 // - Adds a non-negative integer, called delta, to the counter.
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "lowercase")]
-struct AddPayload {
-    src: String,
-    dest: String,
-    body: AddReqBody,
+struct AddData {
+    delta: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct AddReqBody {
-    #[serde(rename = "type")]
-    typ: String, //
-    msg_id: u32,
-    delta: u32, // will be unique
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct AddResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: AddRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct AddRespBody {
-    #[serde(rename = "type")]
-    typ: String, // add_ok
-    in_reply_to: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-struct ReadPayload {
-    src: String,
-    dest: String,
-    body: ReadReqBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ReadReqBody {
-    #[serde(rename = "type")]
-    typ: String,
-    msg_id: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ReadResp {
-    src: String,
-    dest: String,
-    // You can't nest structures in Rust for ownership reasons.
-    body: ReadRespBody,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ReadRespBody {
-    #[serde(rename = "type")]
-    typ: String, // read_ok
-    in_reply_to: u32,
+struct ReadData {
     value: u32,
 }
+
+type ReadResponse = Payload<ResponseBody<ReadData>>;
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
 // the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum Message {
-    Add(AddPayload),
-    Read(ReadPayload),
-    Other(HashMap<String, serde_json::Value>),
+#[serde(tag = "type")]
+enum MessageBody {
+    #[serde(rename = "add")]
+    Add {
+        msg_id: u32,
+        #[serde(flatten)]
+        data: AddData,
+    },
+    #[serde(rename = "read")]
+    Read { msg_id: u32 },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Message {
+    src: String,
+    dest: String,
+    body: MessageBody,
 }
 
 pub fn listen<R, W, T, S>(
@@ -101,55 +64,49 @@ where
     // from_reader will read to end of deserialized object
     let msg: Message = serde_json::from_reader(reader)?;
     info!(">> input: {:?}", msg);
-    match msg {
-        Message::Add(AddPayload { src, dest, body }) => {
+    match msg.body {
+        MessageBody::Add { msg_id, data } => {
             let mut buf = [0u8; 4];
             node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
 
             let old = u32::from_le_bytes(buf);
-            let new = old + body.delta;
+            let new = old + data.delta;
             node.store.seek(SeekFrom::Start(0))?;
             node.store.write_all(&new.to_le_bytes())?;
 
-            let resp = AddResp {
-                src: dest,
-                dest: src,
-                body: AddRespBody {
-                    typ: "add_ok".to_string(),
-                    in_reply_to: body.msg_id,
+            io::to_writer(
+                writer,
+                &Payload {
+                    src: msg.dest,
+                    dest: msg.src,
+                    body: ResponseBody::<()> {
+                        typ: "add_ok".to_string(),
+                        in_reply_to: msg_id,
+                        data: None,
+                    },
                 },
-            };
-
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
+            )?;
         }
-        Message::Read(ReadPayload { src, dest, body }) => {
+
+        MessageBody::Read { msg_id } => {
             let mut buf = [0u8; 4];
             node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
             let v = u32::from_le_bytes(buf);
 
-            let resp = ReadResp {
-                src: dest,
-                dest: src,
-                body: ReadRespBody {
-                    typ: "read_ok".to_string(),
-                    in_reply_to: body.msg_id,
-                    value: v,
+            io::to_writer(
+                writer,
+                &ReadResponse {
+                    src: msg.dest,
+                    dest: msg.src,
+                    body: ResponseBody {
+                        typ: "read_ok".to_string(),
+                        in_reply_to: msg_id,
+                        data: Some(ReadData { value: v }),
+                    },
                 },
-            };
-
-            let mut resp_str = serde_json::to_string(&resp)?;
-            resp_str.push('\n');
-            info!("<< output: {:?}", &resp_str);
-            writer.write_all(resp_str.as_bytes())?;
-        }
-
-        Message::Other(m) => {
-            info!("other: {:?}", m);
+            )?;
         }
     };
     Ok(())
