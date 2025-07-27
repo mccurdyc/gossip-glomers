@@ -1,27 +1,40 @@
 [package]
 name = "app"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+
+[features]
+default = ["broadcast", "counter", "echo", "replicated_log", "unique"]
+broadcast = []
+counter = []
+echo = []
+replicated_log = []
+unique = []
 
 [[bin]]
 name = "echo"
 path = "src/bin/echo/main.rs"
+required-features = ["echo"]
 
 [[bin]]
 name = "unique"
 path = "src/bin/unique-id/main.rs"
+required-features = ["unique"]
 
 [[bin]]
 name = "broadcast"
 path = "src/bin/broadcast/main.rs"
+required-features = ["broadcast"]
 
 [[bin]]
 name = "counter"
 path = "src/bin/counter/main.rs"
+required-features = ["counter"]
 
 [[bin]]
 name = "replicated-log"
 path = "src/bin/replicated-log/main.rs"
+required-features = ["replicated_log"]
 
 [dependencies]
 anyhow = "1.0.86"
