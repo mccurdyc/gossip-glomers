@@ -1,6 +1,5 @@
 use crate::{config, init, node, store};
 use anyhow::Result;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, Cursor, Write};
@@ -14,6 +13,7 @@ pub struct Metadata {
 #[derive(Debug)]
 pub struct Node<'a, S: store::Store> {
     id: String, // include it as the src of any message it sends.
+    pub world: HashMap<String, Metadata>,
     pub neighborhood: HashMap<String, Metadata>,
     pub store: &'a mut S,
 }
@@ -32,6 +32,7 @@ impl<'a, S: store::Store> Node<'a, S> {
     {
         Self {
             id: std::default::Default::default(),
+            world: std::default::Default::default(),
             neighborhood: std::default::Default::default(),
             store: s,
         }
@@ -43,23 +44,26 @@ impl<'a, S: store::Store> Node<'a, S> {
     {
         self.id = node_id;
         self.neighborhood = HashMap::new();
+        self.world = HashMap::new();
 
         for n in node_ids {
             if n == self.id {
                 continue;
             }
 
-            // let's pretend (for now, just use a random number generator)
+            // Let's pretend (for now, just use a random number generator)
             // the init message included weights
-            // Then, let's use those weights to choose a neighborhood
-            let priority: u8 = rand::random_range(0..=100);
+            //
             // NOTE: We don't filter the neighborhood here because filtering where
             // messages go will be up to the send/response implementation.
             // In other words, there may be cases where we want to send a message
             // to everyone and other places where we want to be selective.
-            self.neighborhood.insert(n, Metadata { priority });
-            // Would be nice to have a sorted list of neighbors that messages should
-            // be sent to or a filtered list.
+            let priority: u8 = rand::random_range(0..=100);
+            self.world.insert(n.clone(), Metadata { priority });
+
+            if priority > 33 {
+                self.neighborhood.insert(n.clone(), Metadata { priority });
+            }
         }
     }
 
