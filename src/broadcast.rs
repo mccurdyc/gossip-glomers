@@ -89,7 +89,7 @@ where
                         data: None,
                     },
                 },
-            );
+            )?;
         }
 
         Message::Broadcast(BroadcastReqPayload { src, dest, body }) => {
@@ -103,7 +103,7 @@ where
                 &mut node.store,
                 &body.data.ok_or("failed").unwrap().message,
             )?;
-            writeln!(node.store);
+            writeln!(node.store)?;
 
             io::to_writer(
                 writer,
@@ -151,6 +151,6 @@ where
         Message::Other(m) => {
             info!("other: {:?}", m);
         }
-    };
+    }
     Ok(())
 }
