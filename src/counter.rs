@@ -1,4 +1,4 @@
-use crate::payload::{Payload, ResponseBody, UnhandledMessage};
+use crate::payload::{Payload, ResponseBody};
 use crate::{config, io, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
