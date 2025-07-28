@@ -1,4 +1,5 @@
-use crate::{config, io, node, payload, store};
+use crate::payload::{Payload, ResponseBody};
+use crate::{config, io, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,43 +23,29 @@ use tracing::info;
 // Fanout of 3-5 nodes per gossip round
 // Log(N) rounds to reach full coverage (where N = total nodes)
 
-// Send-specific data structures
-#[derive(Serialize, Deserialize, Debug)]
-struct TopologyData {
-    topology: HashMap<String, Vec<String>>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct BroadcastReqData {
-    message: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ReadReqData {
-    msg_id: u32,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 struct ReadRespData {
     messages: Vec<u32>,
 }
-
-// Type aliases for cleaner usage
-type TopologyPayload = payload::Payload<payload::RequestBody<TopologyData>>;
-type BroadcastReqPayload = payload::Payload<payload::RequestBody<BroadcastReqData>>;
-type ReadReqPayload = payload::Payload<payload::RequestBody<ReadReqData>>;
-type ReadRespPayload = payload::Payload<payload::ResponseBody<ReadRespData>>;
 
 // I use "untagged" in the following because the type tag differs based on the message.
 // I could split the Init message into a separate enum so that I could infer
 // the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-enum Message {
-    Topology(TopologyPayload),
-    Broadcast(BroadcastReqPayload),
-    Read(ReadReqPayload),
-    Other(payload::UnhandledMessage),
+enum RequestBody {
+    Topology {
+        msg_id: u32,
+        topology: HashMap<String, Vec<String>>,
+    },
+    Broadcast {
+        msg_id: u32,
+        message: u32,
+    },
+    Read {
+        msg_id: u32,
+    },
+    Other,
 }
 
 pub fn listen<R, W, T, S>(
@@ -75,51 +62,51 @@ where
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
-    let msg: Message = serde_json::from_reader(reader)?;
-    match msg {
-        Message::Topology(TopologyPayload { src, dest, body }) => {
+    let msg: Payload<RequestBody> = serde_json::from_reader(reader)?;
+    match msg.body {
+        RequestBody::Topology {
+            msg_id,
+            topology: _,
+        } => {
             io::to_writer(
                 writer,
-                &payload::Payload {
-                    src: dest,
-                    dest: src,
-                    body: payload::ResponseBody::<()> {
+                &Payload {
+                    src: msg.dest,
+                    dest: msg.src,
+                    body: ResponseBody::<()> {
                         typ: "topology_ok".to_string(),
-                        in_reply_to: body.msg_id,
+                        in_reply_to: msg_id,
                         data: None,
                     },
                 },
             )?;
         }
 
-        Message::Broadcast(BroadcastReqPayload { src, dest, body }) => {
+        RequestBody::Broadcast { msg_id, message } => {
             // TODO: needs to actually talk to other nodes via STDOUT and sending a Broadcast
             // message
             //
             // "hotness" of a message
 
             // Stores the message in the Store
-            serde_json::ser::to_writer(
-                &mut node.store,
-                &body.data.ok_or("failed").unwrap().message,
-            )?;
+            serde_json::ser::to_writer(&mut node.store, &message)?;
             writeln!(node.store)?;
 
             io::to_writer(
                 writer,
-                &payload::Payload {
-                    src: dest,
-                    dest: src,
-                    body: payload::ResponseBody::<()> {
+                &Payload {
+                    src: msg.dest,
+                    dest: msg.src,
+                    body: ResponseBody::<()> {
                         typ: "broadcast_ok".to_string(),
-                        in_reply_to: body.msg_id,
+                        in_reply_to: msg_id,
                         data: None,
                     },
                 },
             )?;
         }
 
-        Message::Read(ReadReqPayload { src, dest, body }) => {
+        RequestBody::Read { msg_id } => {
             // Make sure we reset the file offset
             // TODO: this makes no sense for stores that are NOT file-based (maybe)
             // TODO: this breaks the interface to the store. The store should not
@@ -136,20 +123,20 @@ where
 
             io::to_writer(
                 writer,
-                &payload::Payload {
-                    src: dest,
-                    dest: src,
-                    body: payload::ResponseBody {
+                &Payload {
+                    src: msg.dest,
+                    dest: msg.src,
+                    body: ResponseBody {
                         typ: "read_ok".to_string(),
-                        in_reply_to: body.msg_id,
+                        in_reply_to: msg_id,
                         data: Some(ReadRespData { messages: seen }),
                     },
                 },
             )?;
         }
 
-        Message::Other(m) => {
-            info!("other: {:?}", m);
+        RequestBody::Other => {
+            info!("other: {:?}", msg);
         }
     }
     Ok(())
