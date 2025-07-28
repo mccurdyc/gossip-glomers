@@ -1,4 +1,4 @@
-use crate::payload::{Payload, RequestBody, ResponseBody, UnhandledMessage};
+use crate::payload::{Payload, ResponseBody, UnhandledMessage};
 use crate::{config, io, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -12,13 +12,8 @@ use tracing::info;
 // Workload
 // - Adds a non-negative integer, called delta, to the counter.
 
-#[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(rename_all = "lowercase")]
-struct AddData {
-    delta: u32,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
 struct ReadData {
     value: u32,
 }
@@ -30,22 +25,16 @@ type ReadResponse = Payload<ResponseBody<ReadData>>;
 // the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
-enum MessageBody {
-    #[serde(rename = "add")]
+enum RequestBody {
     Add {
         msg_id: u32,
-        #[serde(flatten)]
-        data: AddData,
+        delta: u32,
     },
-    #[serde(rename = "read")]
-    Read { msg_id: u32 },
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Message {
-    src: String,
-    dest: String,
-    body: MessageBody,
+    Read {
+        msg_id: u32,
+    },
+    #[serde(other)]
+    Other,
 }
 
 pub fn listen<R, W, T, S>(
@@ -62,16 +51,16 @@ where
 {
     // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
     // from_reader will read to end of deserialized object
-    let msg: Message = serde_json::from_reader(reader)?;
+    let msg: Payload<RequestBody> = serde_json::from_reader(reader)?;
     info!(">> input: {:?}", msg);
     match msg.body {
-        MessageBody::Add { msg_id, data } => {
+        RequestBody::Add { msg_id, delta } => {
             let mut buf = [0u8; 4];
             node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
 
             let old = u32::from_le_bytes(buf);
-            let new = old + data.delta;
+            let new = old + delta;
             node.store.seek(SeekFrom::Start(0))?;
             node.store.write_all(&new.to_le_bytes())?;
 
@@ -89,7 +78,7 @@ where
             )?;
         }
 
-        MessageBody::Read { msg_id } => {
+        RequestBody::Read { msg_id } => {
             let mut buf = [0u8; 4];
             node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
@@ -107,6 +96,10 @@ where
                     },
                 },
             )?;
+        }
+
+        RequestBody::Other => {
+            info!("other: {:?}", msg);
         }
     };
     Ok(())
