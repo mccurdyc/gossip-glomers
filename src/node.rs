@@ -7,12 +7,12 @@ use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct Metadata {
-    priority: u8,
+    pub priority: u8,
 }
 
 #[derive(Debug)]
 pub struct Node<'a, S: store::Store> {
-    id: String, // include it as the src of any message it sends.
+    pub id: String, // include it as the src of any message it sends.
     pub world: HashMap<String, Metadata>,
     pub neighborhood: HashMap<String, Metadata>,
     pub store: &'a mut S,

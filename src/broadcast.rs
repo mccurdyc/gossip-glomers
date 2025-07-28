@@ -83,10 +83,17 @@ where
         }
 
         RequestBody::Broadcast { msg_id, message } => {
-            // TODO: needs to actually talk to other nodes via STDOUT and sending a Broadcast
-            // message
-            //
             // "hotness" of a message
+            for (k, _) in node.neighborhood.iter() {
+                io::to_writer(
+                    writer,
+                    &Payload {
+                        src: node.id.clone(),
+                        dest: k.to_owned(),
+                        body: RequestBody::Broadcast { msg_id, message },
+                    },
+                )?;
+            }
 
             // Stores the message in the Store
             serde_json::ser::to_writer(&mut node.store, &message)?;
