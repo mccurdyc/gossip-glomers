@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use app::{broadcast, config, counter, echo, node, store, unique};
+    use app::{broadcast, config, echo, node, store, unique};
     use once_cell::sync::Lazy;
     use std::io::{Cursor, Write};
     use std::vec::Vec;
-    use tempfile::NamedTempFile;
     use tracing::info;
 
     struct MockTime;
@@ -246,7 +245,7 @@ mod tests {
 
             let mut s = (case.s)();
             (case.setup_fn)(&mut s); // calls the appropriate setup fn based on the store in
-                                     // the test case
+            // the test case
             match s {
                 Store::Memory(mut v) => {
                     let mut n = node::Node::<store::MemoryStore>::new(&mut v);
@@ -261,50 +260,6 @@ mod tests {
             }
 
             assert_eq!(String::from_utf8(vec).unwrap().trim(), case.expected.trim());
-        }
-    }
-
-    #[test]
-    fn counter() {
-        // setup closure
-        let setup = |starting_value: u32| {
-            let mut f = NamedTempFile::new().expect("Failed to create test tempfile");
-            let buf = u32::to_be_bytes(starting_value);
-            f.write_all(&buf)
-                .expect("Failed to writing starting value to file");
-            f
-        };
-
-        let cleanup = |f: NamedTempFile| {
-            f.into_temp_path()
-                .close() // closes and removes
-                .expect("Failed to cleanup test tempfile")
-        };
-
-        let test_cases = vec![(
-            0,
-            r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
-"#,
-            r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":0}}
-"#,
-        )];
-
-        let buf: Vec<u8> = Vec::new();
-        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
-        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
-            .expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
-
-        for (starting_value, input, expected) in test_cases {
-            // Necessary to implement Read trait on BufReader for bytes
-            let mut vec: Vec<u8> = Vec::new();
-            let mut write_cursor = Cursor::new(&mut vec);
-            let read_cursor = Cursor::new(input.as_bytes());
-
-            let f = setup(starting_value);
-            counter::listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
-            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
-            cleanup(f);
         }
     }
 }

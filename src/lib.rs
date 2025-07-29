@@ -18,3 +18,6 @@ pub mod echo;
 
 #[cfg(feature = "unique")]
 pub mod unique;
+
+#[cfg(feature = "replicated_log")]
+pub mod replicated_log;

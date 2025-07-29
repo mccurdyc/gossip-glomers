@@ -104,3 +104,55 @@ where
     };
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn counter() {
+        let test_cases = vec![
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":0}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"add","msg_id":100,"delta":2}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"add_ok","in_reply_to":100}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"add","msg_id":100,"delta":2}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"add_ok","in_reply_to":100}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":4}}
+"#,
+            ),
+        ];
+
+        let buf: Vec<u8> = Vec::new();
+        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
+        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+            .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+
+        for (input, expected) in test_cases {
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
+        }
+    }
+}
