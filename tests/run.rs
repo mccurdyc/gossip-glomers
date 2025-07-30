@@ -245,7 +245,7 @@ mod tests {
 
             let mut s = (case.s)();
             (case.setup_fn)(&mut s); // calls the appropriate setup fn based on the store in
-            // the test case
+                                     // the test case
             match s {
                 Store::Memory(mut v) => {
                     let mut n = node::Node::<store::MemoryStore>::new(&mut v);

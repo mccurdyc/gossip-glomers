@@ -25,6 +25,7 @@ type ReadResponse = Payload<ResponseBody<ReadData>>;
 // the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
 enum RequestBody {
     Add {
         msg_id: u32,
@@ -114,27 +115,27 @@ mod tests {
     fn counter() {
         let test_cases = vec![
             (
-                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":1}}
 "#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":0}}
-"#,
-            ),
-            (
-                r#"{"src":"c1","dest":"n1","body":{"type":"add","msg_id":100,"delta":2}}
-"#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"add_ok","in_reply_to":100}}
+                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":1,"value":0}}
 "#,
             ),
             (
-                r#"{"src":"c1","dest":"n1","body":{"type":"add","msg_id":100,"delta":2}}
+                r#"{"src":"c1","dest":"n1","body":{"type":"add","msg_id":2,"delta":2}}
 "#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"add_ok","in_reply_to":100}}
+                r#"{"src":"n1","dest":"c1","body":{"type":"add_ok","in_reply_to":2}}
 "#,
             ),
             (
-                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+                r#"{"src":"c1","dest":"n1","body":{"type":"add","msg_id":3,"delta":2}}
 "#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"value":4}}
+                r#"{"src":"n1","dest":"c1","body":{"type":"add_ok","in_reply_to":3}}
+"#,
+            ),
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":4}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":4,"value":4}}
 "#,
             ),
         ];
@@ -147,12 +148,12 @@ mod tests {
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
-            let mut vec: Vec<u8> = Vec::new();
-            let mut write_cursor = Cursor::new(&mut vec);
+            let mut actual: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut actual);
             let read_cursor = Cursor::new(input.as_bytes());
 
             listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
-            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
+            assert_eq!(String::from_utf8(actual).unwrap().trim(), expected.trim());
         }
     }
 }
