@@ -98,14 +98,18 @@
                 pass_filenames = false;
               };
 
+              just-fmt = {
+                enable = true;
+                name = "just-fmt";
+                entry = "just fmt";
+                stages = [ "pre-commit" ];
+                pass_filenames = false;
+              };
+
               # Nix
               deadnix.enable = true;
               nixpkgs-fmt.enable = true;
               statix.enable = true;
-
-              # Rust
-              rustfmt.enable = true;
-              cargo-check.enable = true;
 
               # Shell
               shellcheck.enable = true;
@@ -263,7 +267,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          shellHook = (self.checks.${system}.pre-commit-check).shellHook +
+          shellHook = self.checks.${system}.pre-commit-check.shellHook +
             ''
             '';
           nativeBuildInputs = with pkgs; [

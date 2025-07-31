@@ -26,6 +26,9 @@ test *TEST:
 lint:
     cargo clippy
 
+fmt:
+    cargo fmt
+
 docker-build:
     docker build \
       -f Dockerfile.dev \

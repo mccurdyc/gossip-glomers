@@ -1,4 +1,4 @@
-use crate::{config, init, node, store};
+use crate::{config, io, node, payload, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,10 +19,16 @@ pub struct Node<'a, S: store::Store> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct InitData {
+    node_id: String,
+    node_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Message {
-    Init(init::Payload),
-    Other(HashMap<String, serde_json::Value>),
+    Init(payload::Payload<payload::RequestBody<InitData>>),
+    Other(payload::UnhandledMessage),
 }
 
 impl<'a, S: store::Store> Node<'a, S> {
@@ -92,20 +98,23 @@ impl<'a, S: store::Store> Node<'a, S> {
                 let msg: Message = serde_json::from_str(&l)?;
 
                 match msg {
-                    Message::Init(init::Payload { src, dest, body }) => {
-                        self.init(body.node_id, body.node_ids);
-                        let resp = init::Resp {
-                            src: dest,
-                            dest: src,
-                            body: init::RespBody {
-                                typ: "init_ok".to_string(),
-                                in_reply_to: body.msg_id,
+                    Message::Init(payload::Payload { src, dest, body }) => {
+                        let b = body.data.expect("expected init request body");
+
+                        self.init(b.node_id, b.node_ids);
+
+                        io::to_writer(
+                            &mut writer,
+                            payload::Payload {
+                                src: dest,
+                                dest: src,
+                                body: payload::ResponseBody::<()> {
+                                    typ: "init_ok".to_string(),
+                                    in_reply_to: body.msg_id,
+                                    data: None,
+                                },
                             },
-                        };
-                        let mut resp_str = serde_json::to_string(&resp)?;
-                        resp_str.push('\n');
-                        info!("<< output: {:?}", &resp_str);
-                        writer.write_all(resp_str.as_bytes())?;
+                        )?
                     }
                     Message::Other(_) => {
                         let buf = Box::new(Cursor::new(l));

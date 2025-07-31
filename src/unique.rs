@@ -20,6 +20,7 @@ type UniqueResponse = Payload<ResponseBody<Data>>;
 // the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
+#[serde(rename_all = "lowercase")]
 enum Message {
     Unique(UniqueRequest),
     Other(UnhandledMessage),
@@ -66,4 +67,52 @@ where
         }
     };
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config;
+    use std::io::Cursor;
+
+    struct MockTime;
+    impl config::TimeSource for MockTime {
+        fn now(&self) -> std::time::SystemTime {
+            std::time::SystemTime::UNIX_EPOCH
+        }
+    }
+
+    #[test]
+    fn unique() {
+        let test_cases = vec![
+            (
+                r#"{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"generate_ok","in_reply_to":1,"id":"979f89fa9ea19c49f86ff60ea893db2d66df54d8bba01bd024ca2b837d731c6a"}}
+"#,
+            ),
+            (
+                r#"{"src":"f11","dest":"z10","body":{"type":"generate","msg_id":99}}
+"#,
+                r#"{"src":"z10","dest":"f11","body":{"type":"generate_ok","in_reply_to":99,"id":"575302209a4a1459a01354f6791242f5cf469f6f0a407788f61bb4c2bf3299d0"}}
+"#,
+            ),
+        ];
+
+        let buf: Vec<u8> = Vec::new();
+        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
+        let cfg = config::Config::<MockTime>::new(&MockTime {}).expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+
+        for (input, expected) in test_cases {
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
+
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
+        }
+    }
 }

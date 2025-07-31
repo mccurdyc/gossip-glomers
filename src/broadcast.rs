@@ -148,3 +148,147 @@ where
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    enum Store {
+        Memory(store::MemoryStore),
+        File(store::FileStore),
+    }
+
+    struct BroadcastCase {
+        name: String,
+        s: fn() -> Store,
+        setup_fn: fn(&mut Store),
+        input: String,
+        expected: String,
+    }
+
+    #[test]
+    fn broadcast() {
+        let test_cases = vec![
+            BroadcastCase {
+                name: String::from("one"),
+                s: || -> Store {
+                    Store::Memory(
+                        store::MemoryStore::new(Vec::<u8>::new())
+                            .expect("failed to create memory store"),
+                    )
+                },
+                setup_fn: |s: &mut Store| match s {
+                    Store::Memory(_) => {}
+                    _ => {
+                        panic!("unexpected branch");
+                    }
+                },
+                input: String::from(
+                    r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 42}}
+            "#,
+                ),
+                expected: String::from(
+                    r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":1}}
+            "#,
+                ),
+            },
+            BroadcastCase {
+                name: String::from("two"),
+                s: || -> Store {
+                    Store::Memory(
+                        store::MemoryStore::new(Vec::<u8>::new())
+                            .expect("failed to create memory store"),
+                    )
+                },
+                setup_fn: |s: &mut Store| match s {
+                    Store::Memory(v) => v
+                        .write_all(b"1\n2\n3\n")
+                        .expect("failed to write to memory store"),
+                    _ => {
+                        panic!("unexpected branch");
+                    }
+                },
+                input: String::from(
+                    r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+            "#,
+                ),
+                expected: String::from(
+                    r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1,2,3]}}
+            "#,
+                ),
+            },
+            BroadcastCase {
+                name: String::from("three"),
+                s: || -> Store {
+                    Store::Memory(
+                        store::MemoryStore::new(Vec::<u8>::new())
+                            .expect("failed to create memory store"),
+                    )
+                },
+                setup_fn: |s: &mut Store| match s {
+                    Store::Memory(_) => {}
+                    _ => {
+                        panic!("unexpected branch");
+                    }
+                },
+                input: String::from(
+                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":101,"topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
+            "#,
+                ),
+                expected: String::from(
+                    r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":101}}
+            "#,
+                ),
+            },
+            BroadcastCase {
+                name: String::from("four"),
+                s: || -> Store {
+                    // TODO: this should become a tempfile
+                    let p = std::path::Path::new("./store.txt");
+                    Store::File(store::FileStore::new(p).expect("failed to create file store"))
+                },
+                setup_fn: |s: &mut Store| match s {
+                    Store::File(v) => v
+                        .write_all(b"1\n2\n3\n")
+                        .expect("failed to write to file store"),
+                    _ => {
+                        panic!("unexpected branch");
+                    }
+                },
+                input: String::from(
+                    r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
+        "#,
+                ),
+                expected: String::from(
+                    r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1,2,3]}}
+        "#,
+                ),
+            },
+        ];
+
+        for case in test_cases {
+            info!("TEST: {:?}", case.name);
+            let mut vec: Vec<u8> = Vec::new();
+            let mut write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(case.input.as_bytes());
+            let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+                .expect("failed to get config");
+
+            let mut s = (case.s)();
+            (case.setup_fn)(&mut s); // calls the appropriate setup fn based on the store in
+            match s {
+                Store::Memory(mut v) => {
+                    let mut n = node::Node::<store::MemoryStore>::new(&mut v);
+                    listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
+                }
+                Store::File(mut v) => {
+                    let mut n = node::Node::<store::FileStore>::new(&mut v);
+                    listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
+                }
+            }
+
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), case.expected.trim());
+        }
+    }
+}
