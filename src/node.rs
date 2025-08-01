@@ -13,6 +13,7 @@ pub struct Metadata {
 #[derive(Debug)]
 pub struct Node<'a, S: store::Store> {
     pub id: String, // include it as the src of any message it sends.
+    pub msg_id: u32,
     pub world: HashMap<String, Metadata>,
     pub neighborhood: HashMap<String, Metadata>,
     pub store: &'a mut S,
@@ -38,6 +39,7 @@ impl<'a, S: store::Store> Node<'a, S> {
     {
         Self {
             id: std::default::Default::default(),
+            msg_id: std::default::Default::default(),
             world: std::default::Default::default(),
             neighborhood: std::default::Default::default(),
             store: s,
@@ -48,6 +50,7 @@ impl<'a, S: store::Store> Node<'a, S> {
     where
         S: store::Store,
     {
+        self.msg_id = 1;
         self.id = node_id;
         self.neighborhood = HashMap::new();
         self.world = HashMap::new();
@@ -98,6 +101,7 @@ impl<'a, S: store::Store> Node<'a, S> {
                 let msg: Message = serde_json::from_str(&l)?;
 
                 match msg {
+                    // https://github.com/jepsen-io/maelstrom/blob/8263d1dd2b7af01dd34f5a29d0810746c2be82e2/doc/protocol.md#initialization
                     Message::Init(payload::Payload { src, dest, body }) => {
                         let b = body.data.expect("expected init request body");
 
@@ -116,6 +120,7 @@ impl<'a, S: store::Store> Node<'a, S> {
                             },
                         )?
                     }
+
                     Message::Other(_) => {
                         let buf = Box::new(Cursor::new(l));
                         match f(self, buf, &mut writer, &cfg) {
@@ -131,5 +136,61 @@ impl<'a, S: store::Store> Node<'a, S> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{config, echo, node, store};
+    use once_cell::sync::Lazy;
+    use std::io::Cursor;
+    use std::vec::Vec;
+
+    // Ensure that the `tracing` stack is only initialised once using `once_cell`
+    pub static TRACING: Lazy<()> = Lazy::new(|| {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr) // all debug logs have to go to stderr
+            .with_max_level(tracing::Level::DEBUG)
+            .init();
+    });
+
+    #[test]
+    fn run() {
+        // The first time `initialize` is invoked the code in `TRACING` is executed.
+        // All other invocations will instead skip execution.
+        Lazy::force(&TRACING);
+
+        let test_cases = vec![
+            (
+                r#"{"id":42,"src":"c1","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"32","node_ids":["n1","n2","n3"]}}
+"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","in_reply_to":1}}
+"#,
+            ),
+            (
+                r#"{"src":"f11","dest":"z10","body":{"type":"echo","msg_id":99,"echo":"Please echo 99"}}
+"#,
+                r#"{"src":"z10","dest":"f11","body":{"type":"echo_ok","in_reply_to":99,"echo":"Please echo 99"}}
+"#,
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            let buf: Vec<u8> = Vec::new();
+            let mut s = store::MemoryStore::new(buf).expect("failed to create store");
+            let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+                .expect("failed to get config");
+            let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+
+            // Necessary to implement Read trait on BufReader for bytes
+            let mut vec: Vec<u8> = Vec::new();
+            let write_cursor = Cursor::new(&mut vec);
+            let read_cursor = Cursor::new(input.as_bytes());
+
+            n.run(read_cursor, write_cursor, echo::listen, cfg)
+                .expect("Node did NOT run");
+
+            assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
+        }
     }
 }
