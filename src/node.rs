@@ -1,5 +1,6 @@
 use crate::{config, io, node, payload, store};
 use anyhow::Result;
+use payload::Payload;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, Cursor, Write};
@@ -20,16 +21,16 @@ pub struct Node<'a, S: store::Store> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct InitData {
-    node_id: String,
-    node_ids: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum Message {
-    Init(payload::Payload<payload::RequestBody<InitData>>),
-    Other(payload::UnhandledMessage),
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
+enum RequestBody {
+    Init {
+        msg_id: u32,
+        node_id: String,
+        node_ids: Vec<String>,
+    },
+    #[serde(other)]
+    Other,
 }
 
 impl<'a, S: store::Store> Node<'a, S> {
@@ -96,32 +97,34 @@ impl<'a, S: store::Store> Node<'a, S> {
             if let Ok(l) = line {
                 info!(">> input: {:?}", l);
 
-                // https://docs.rs/serde_json/latest/serde_json/fn.from_reader.html
-                // from_reader will read to end of deserialized object
-                let msg: Message = serde_json::from_str(&l)?;
+                // This tries to deserialize into Payload<RequestBody> based on the "type" field
+                // defined in RequestBody.
+                let msg: Payload<RequestBody> = serde_json::from_str(&l)?;
 
-                match msg {
-                    // https://github.com/jepsen-io/maelstrom/blob/8263d1dd2b7af01dd34f5a29d0810746c2be82e2/doc/protocol.md#initialization
-                    Message::Init(payload::Payload { src, dest, body }) => {
-                        let b = body.data.expect("expected init request body");
-
-                        self.init(b.node_id, b.node_ids);
+                // Match based on the type.
+                match msg.body {
+                    RequestBody::Init {
+                        msg_id,
+                        node_id,
+                        node_ids,
+                    } => {
+                        self.init(node_id, node_ids);
 
                         io::to_writer(
                             &mut writer,
                             payload::Payload {
-                                src: dest,
-                                dest: src,
+                                src: msg.dest,
+                                dest: msg.src,
                                 body: payload::ResponseBody::<()> {
                                     typ: "init_ok".to_string(),
-                                    in_reply_to: body.msg_id,
+                                    in_reply_to: msg_id,
                                     data: None,
                                 },
                             },
                         )?
                     }
 
-                    Message::Other(_) => {
+                    RequestBody::Other => {
                         let buf = Box::new(Cursor::new(l));
                         match f(self, buf, &mut writer, &cfg) {
                             Ok(_) => {}
