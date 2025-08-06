@@ -16,7 +16,7 @@ set quiet := false
 
 shebang := "/usr/bin/env bash"
 docker_image := "coltonmccurdy/gossip"
-maelstrom_cmd := 'java -Djava.awt.headless=true -jar "./maelstrom.jar" test'
+maelstrom_cmd := 'java -Djava.awt.headless=true -jar "./maelstrom.jar"'
 maelstrom_test_cmd := maelstrom_cmd + " test"
 
 # Variadic argument - https://just.systems/man/en/recipe-parameters.html
