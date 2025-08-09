@@ -60,6 +60,16 @@ where
             node.store.seek(SeekFrom::Start(0))?;
             let _ = node.store.read(&mut buf)?;
 
+            // TODO: The lock must extend around this
+            // Reading Ch 55 (p1117) of The Linux System Interface on "File Locking"
+            // describes this exact problem. `flock()` (full file lock) and `fcntl()` (file region
+            // lock).
+            //
+            // - be careful using `stdio` for reading/writing as user-space buffers may not be
+            // synced with locks. Alternatively, you must ensure you flush the buffer immediately after taking and
+            // before releasing the lock.
+            //
+            // https://github.com/rust-lang/libs-team/issues/412
             let old = u32::from_le_bytes(buf);
             let new = old + delta;
             node.store.seek(SeekFrom::Start(0))?;

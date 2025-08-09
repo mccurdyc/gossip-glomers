@@ -134,7 +134,11 @@ impl Write for FileStore {
 
 impl Read for FileStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        self.inner.read(buf)
+        self.file.lock_exclusive()?;
+        let u = self.inner.read(buf);
+        fs2::FileExt::unlock(&self.file)?;
+
+        u
     }
 }
 
