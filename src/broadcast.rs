@@ -153,6 +153,7 @@ where
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use tempfile::NamedTempFile;
 
     enum Store {
         Memory(store::MemoryStore),
@@ -244,9 +245,10 @@ mod tests {
             BroadcastCase {
                 name: String::from("four"),
                 s: || -> Store {
-                    // TODO: this should become a tempfile
-                    let p = std::path::Path::new("./store.txt");
-                    Store::File(store::FileStore::new(p).expect("failed to create file store"))
+                    let file = NamedTempFile::new().expect("failed to obtain tempfile");
+                    Store::File(
+                        store::FileStore::new(file.path()).expect("failed to create file store"),
+                    )
                 },
                 setup_fn: |s: &mut Store| match s {
                     Store::File(v) => v
