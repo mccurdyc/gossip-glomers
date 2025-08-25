@@ -83,8 +83,11 @@ where
         }
 
         RequestBody::Broadcast { msg_id, message } => {
-            // "hotness" of a message
             for (k, _) in node.neighborhood.iter() {
+                // We write to `writer` which is stdout because maelstrom
+                // should then forward to the other node? I believe. I
+                // don't think we can make that assumption actually. I think
+                // we may need to implement to communication channels between nodes.
                 io::to_writer(
                     writer,
                     &Payload {
@@ -153,144 +156,82 @@ where
 mod tests {
     use super::*;
     use std::io::Cursor;
-    use tempfile::NamedTempFile;
-
-    enum Store {
-        Memory(store::MemoryStore),
-        File(store::FileStore),
-    }
 
     struct BroadcastCase {
         name: String,
-        s: fn() -> Store,
-        setup_fn: fn(&mut Store),
-        input: String,
-        expected: String,
+        setup: fn(&mut store::MemoryStore) -> node::Node<store::MemoryStore>,
+        expected: Vec<(&'static str, &'static str)>,
     }
 
     #[test]
     fn broadcast() {
-        let test_cases = vec![
-            BroadcastCase {
-                name: String::from("one"),
-                s: || -> Store {
-                    Store::Memory(
-                        store::MemoryStore::new(Vec::<u8>::new())
-                            .expect("failed to create memory store"),
-                    )
-                },
-                setup_fn: |s: &mut Store| match s {
-                    Store::Memory(_) => {}
-                    _ => {
-                        panic!("unexpected branch");
-                    }
-                },
-                input: String::from(
-                    r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":1, "message": 42}}
-            "#,
-                ),
-                expected: String::from(
-                    r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":1}}
-            "#,
-                ),
+        // TODO: these tests dont actually test that messages are broadcasted.
+        // They don't setup neighborhoods, etc.
+        //
+        // These tests need to be reworked to have full setups:
+        // get a topology message, get a broadcast, get a read, then assert.
+        // The assertion also needs to check that the neighbor nodes received the broadcast via a read.
+        // We only need to verify one layer of broadcasts, not broadcasts of broadcasts.
+        let test_cases = vec![BroadcastCase {
+            name: String::from("one"),
+            setup: |s: &mut store::MemoryStore| -> node::Node<store::MemoryStore> {
+                let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+                    .expect("failed to get config");
+
+                let mut n = node::Node::<store::MemoryStore>::new(s);
+
+                let messages = vec![
+                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":1,"topology":{"n1":["n2"]}}}"#,
+                    r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":2,"message":222}}"#,
+                    r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":3,"message":333}}"#,
+                ];
+
+                let w = Vec::<u8>::new();
+                let mut write_cursor = Cursor::new(w);
+
+                for m in messages {
+                    let read_cursor = Cursor::new(String::from(m));
+                    listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("failed to listen");
+                }
+
+                n
             },
-            BroadcastCase {
-                name: String::from("two"),
-                s: || -> Store {
-                    Store::Memory(
-                        store::MemoryStore::new(Vec::<u8>::new())
-                            .expect("failed to create memory store"),
-                    )
-                },
-                setup_fn: |s: &mut Store| match s {
-                    Store::Memory(v) => v
-                        .write_all(b"1\n2\n3\n")
-                        .expect("failed to write to memory store"),
-                    _ => {
-                        panic!("unexpected branch");
-                    }
-                },
-                input: String::from(
-                    r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
-            "#,
+            expected: vec![
+                (
+                    "n1",
+                    r#"{"src":"n1","body":{"type":"read_ok","messages":["222","333"]}}\n"#,
                 ),
-                expected: String::from(
-                    r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1,2,3]}}
-            "#,
+                (
+                    "n2",
+                    r#"{"src":"n2","body":{"type":"read_ok","messages":["222","333"]}}\n"#,
                 ),
-            },
-            BroadcastCase {
-                name: String::from("three"),
-                s: || -> Store {
-                    Store::Memory(
-                        store::MemoryStore::new(Vec::<u8>::new())
-                            .expect("failed to create memory store"),
-                    )
-                },
-                setup_fn: |s: &mut Store| match s {
-                    Store::Memory(_) => {}
-                    _ => {
-                        panic!("unexpected branch");
-                    }
-                },
-                input: String::from(
-                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":101,"topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
-            "#,
-                ),
-                expected: String::from(
-                    r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":101}}
-            "#,
-                ),
-            },
-            BroadcastCase {
-                name: String::from("four"),
-                s: || -> Store {
-                    let file = NamedTempFile::new().expect("failed to obtain tempfile");
-                    Store::File(
-                        store::FileStore::new(file.path()).expect("failed to create file store"),
-                    )
-                },
-                setup_fn: |s: &mut Store| match s {
-                    Store::File(v) => v
-                        .write_all(b"1\n2\n3\n")
-                        .expect("failed to write to file store"),
-                    _ => {
-                        panic!("unexpected branch");
-                    }
-                },
-                input: String::from(
-                    r#"{"src":"c1","dest":"n1","body":{"type":"read","msg_id":100}}
-        "#,
-                ),
-                expected: String::from(
-                    r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":100,"messages":[1,2,3]}}
-        "#,
-                ),
-            },
-        ];
+            ],
+        }];
 
         for case in test_cases {
             info!("TEST: {:?}", case.name);
-            let mut vec: Vec<u8> = Vec::new();
-            let mut write_cursor = Cursor::new(&mut vec);
-            let read_cursor = Cursor::new(case.input.as_bytes());
-            let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
-                .expect("failed to get config");
 
-            let mut s = (case.s)();
-            (case.setup_fn)(&mut s); // calls the appropriate setup fn based on the store in
-            match s {
-                Store::Memory(mut v) => {
-                    let mut n = node::Node::<store::MemoryStore>::new(&mut v);
-                    listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
-                }
-                Store::File(mut v) => {
-                    let mut n = node::Node::<store::FileStore>::new(&mut v);
-                    listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
-                }
+            let mut s =
+                store::MemoryStore::new(Vec::<u8>::new()).expect("failed to create memory store");
+
+            let mut n = (case.setup)(&mut s);
+
+            for (node, value) in case.expected {
+                let read_cursor = Cursor::new(String::from(format!(
+                    r#"{{"src":"{}","body":{{"type":"read"}}}}\n"#,
+                    node
+                )));
+                let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+                    .expect("failed to get config");
+
+                let mut actual = Cursor::new(Vec::<u8>::new());
+
+                listen(&mut n, read_cursor, &mut actual, &cfg).expect("failed to listen");
+                let inner = &actual.into_inner();
+                let a = std::str::from_utf8(inner).expect("failed to convert actual to str");
+
+                assert_eq!(a, value);
             }
-
-            assert_eq!(String::from_utf8(vec).unwrap().trim(), case.expected.trim());
         }
     }
 }
