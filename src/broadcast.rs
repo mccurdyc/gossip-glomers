@@ -32,7 +32,8 @@ struct ReadRespData {
 // I could split the Init message into a separate enum so that I could infer
 // the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
 enum RequestBody {
     Topology {
         msg_id: u32,
@@ -45,6 +46,7 @@ enum RequestBody {
     Read {
         msg_id: u32,
     },
+    #[serde(other)]
     Other,
 }
 
@@ -160,7 +162,7 @@ mod tests {
     struct BroadcastCase {
         name: String,
         setup: fn(&mut store::MemoryStore) -> node::Node<store::MemoryStore>,
-        expected: Vec<(&'static str, &'static str)>,
+        expected: Vec<(&'static str, String)>,
     }
 
     #[test]
@@ -199,11 +201,17 @@ mod tests {
             expected: vec![
                 (
                     "n1",
-                    r#"{"src":"n1","body":{"type":"read_ok","messages":["222","333"]}}\n"#,
+                    format!(
+                        "{}\n",
+                        r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#
+                    ),
                 ),
                 (
                     "n2",
-                    r#"{"src":"n2","body":{"type":"read_ok","messages":["222","333"]}}\n"#,
+                    format!(
+                        "{}\n",
+                        r#"{"src":"n2","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#
+                    ),
                 ),
             ],
         }];
@@ -218,7 +226,7 @@ mod tests {
 
             for (node, value) in case.expected {
                 let read_cursor = Cursor::new(String::from(format!(
-                    r#"{{"src":"{}","body":{{"type":"read"}}}}\n"#,
+                    r#"{{"src":"c1","dest":"{}","body":{{"msg_id":5,"type":"read"}}}}"#,
                     node
                 )));
                 let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
