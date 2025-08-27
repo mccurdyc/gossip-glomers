@@ -86,10 +86,10 @@ where
 
         RequestBody::Broadcast { msg_id, message } => {
             for (k, _) in node.neighborhood.iter() {
-                // We write to `writer` which is stdout because maelstrom
-                // should then forward to the other node? I believe. I
-                // don't think we can make that assumption actually. I think
-                // we may need to implement to communication channels between nodes.
+                // TODO: this does NOT seem to be working. It does appear that it should though.
+                // https://github.com/jepsen-io/maelstrom/blob/main/doc/protocol.md#nodes-and-networks
+                // Is it because it's not a new, unique, message id? Therefore, maelstrom thinks
+                // it has already handled that message?
                 io::to_writer(
                     writer,
                     &Payload {
@@ -161,8 +161,8 @@ mod tests {
 
     struct BroadcastCase {
         name: String,
-        setup: fn(&mut store::MemoryStore) -> node::Node<store::MemoryStore>,
-        expected: Vec<(&'static str, String)>,
+        setup: fn(&mut store::MemoryStore) -> Vec<u8>,
+        expected: Vec<&'static str>,
     }
 
     #[test]
@@ -176,43 +176,39 @@ mod tests {
         // We only need to verify one layer of broadcasts, not broadcasts of broadcasts.
         let test_cases = vec![BroadcastCase {
             name: String::from("one"),
-            setup: |s: &mut store::MemoryStore| -> node::Node<store::MemoryStore> {
+            setup: |s: &mut store::MemoryStore| -> Vec<u8> {
                 let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                     .expect("failed to get config");
 
                 let mut n = node::Node::<store::MemoryStore>::new(s);
 
                 let messages = vec![
-                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":1,"topology":{"n1":["n2"]}}}"#,
+                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":1,"topology":{"n1":["n2","n3"]}}}"#,
                     r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":2,"message":222}}"#,
                     r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":3,"message":333}}"#,
+                    r#"{"src":"c1","dest":"n1","body":{"msg_id":5,"type":"read"}}"#,
                 ];
 
-                let w = Vec::<u8>::new();
-                let mut write_cursor = Cursor::new(w);
+                let mut sent = Cursor::new(Vec::<u8>::new());
 
                 for m in messages {
                     let read_cursor = Cursor::new(String::from(m));
-                    listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("failed to listen");
+                    listen(&mut n, read_cursor, &mut sent, &cfg).expect("failed to listen");
                 }
 
-                n
+                sent.into_inner()
             },
+            // We need to keep a list of messages that a node "sends".
+            // To assert that it sends a re-broadcast message. Instead of checking node states.
             expected: vec![
-                (
-                    "n1",
-                    format!(
-                        "{}\n",
-                        r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#
-                    ),
-                ),
-                (
-                    "n2",
-                    format!(
-                        "{}\n",
-                        r#"{"src":"n2","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#
-                    ),
-                ),
+                r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","msg_id":1,"topology":{"n1":["n2","n3"]}}}"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","msg_id":2,"message":222}}"#,
+                r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":222222,"message":222}}"#,
+                r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":333333,"message":222}}"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","msg_id":3,"message":333}}"#,
+                r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":444444,"message":333}}"#,
+                r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":555555,"message":333}}"#,
+                r#"{{"src":"n1","dest":"c1","body":{{"type":"read_ok","msg_id":5,}}}}"#,
             ],
         }];
 
@@ -222,24 +218,15 @@ mod tests {
             let mut s =
                 store::MemoryStore::new(Vec::<u8>::new()).expect("failed to create memory store");
 
-            let mut n = (case.setup)(&mut s);
+            let sent = (case.setup)(&mut s);
 
-            for (node, value) in case.expected {
-                let read_cursor = Cursor::new(String::from(format!(
-                    r#"{{"src":"c1","dest":"{}","body":{{"msg_id":5,"type":"read"}}}}"#,
-                    node
-                )));
-                let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
-                    .expect("failed to get config");
+            let sent_str = String::from_utf8(sent).expect("Invalid UTF-8");
+            let sent_lines: Vec<&str> = sent_str.lines().collect();
 
-                let mut actual = Cursor::new(Vec::<u8>::new());
+            dbg!(&case.expected);
+            dbg!(&sent_lines);
 
-                listen(&mut n, read_cursor, &mut actual, &cfg).expect("failed to listen");
-                let inner = &actual.into_inner();
-                let a = std::str::from_utf8(inner).expect("failed to convert actual to str");
-
-                assert_eq!(a, value);
-            }
+            assert_eq!(case.expected, sent_lines);
         }
     }
 }
