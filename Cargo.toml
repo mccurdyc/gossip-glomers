@@ -38,6 +38,7 @@ required-features = ["replicated_log"]
 
 [dependencies]
 anyhow = "1.0.86"
+assert-json-diff = "2.0.2"
 clap = { version = "4.5.8", features = ["derive"] }
 fs2 = "0.4.3"
 hex = "0.4.3"

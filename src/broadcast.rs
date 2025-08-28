@@ -68,7 +68,8 @@ where
     match msg.body {
         RequestBody::Topology {
             msg_id,
-            topology: _,
+            topology: _, // NOTE: we don't use the topology message because I'm trying to define my
+                         // own random neighborhood generator in node.init().
         } => {
             io::to_writer(
                 writer,
@@ -86,10 +87,6 @@ where
 
         RequestBody::Broadcast { msg_id, message } => {
             for (k, _) in node.neighborhood.iter() {
-                // TODO: this does NOT seem to be working. It does appear that it should though.
-                // https://github.com/jepsen-io/maelstrom/blob/main/doc/protocol.md#nodes-and-networks
-                // Is it because it's not a new, unique, message id? Therefore, maelstrom thinks
-                // it has already handled that message?
                 io::to_writer(
                     writer,
                     &Payload {
@@ -100,7 +97,7 @@ where
                 )?;
             }
 
-            // Stores the message in the Store
+            // Stores the message in the Store to later be served by a read().
             serde_json::ser::to_writer(&mut node.store, &message)?;
             writeln!(node.store)?;
 
@@ -156,6 +153,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use assert_json_diff::assert_json_eq;
+    use serde_json::json;
+
     use super::*;
     use std::io::Cursor;
 
@@ -180,10 +180,16 @@ mod tests {
                 let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                     .expect("failed to get config");
 
+                // TODO: needs to be instantiated with a neighborhood here since it's in an init
+                // message that instantiates a node's neighborhood.
                 let mut n = node::Node::<store::MemoryStore>::new(s);
+                n.neighborhood
+                    .insert(String::from("n2"), node::Metadata { priority: 99 });
+                n.neighborhood
+                    .insert(String::from("n3"), node::Metadata { priority: 99 });
 
                 let messages = vec![
-                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":1,"topology":{"n1":["n2","n3"]}}}"#,
+                    r#"{"src":"c1","dest":"n1","body":{"type":"topology","msg_id":1,"topology":{"n1":["ignored","ignored"]}}}"#,
                     r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":2,"message":222}}"#,
                     r#"{"src":"c1","dest":"n1","body":{"type":"broadcast","msg_id":3,"message":333}}"#,
                     r#"{"src":"c1","dest":"n1","body":{"msg_id":5,"type":"read"}}"#,
@@ -201,14 +207,14 @@ mod tests {
             // We need to keep a list of messages that a node "sends".
             // To assert that it sends a re-broadcast message. Instead of checking node states.
             expected: vec![
-                r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","msg_id":1,"topology":{"n1":["n2","n3"]}}}"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","msg_id":1}}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","msg_id":2,"message":222}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":222222,"message":222}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":333333,"message":222}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","msg_id":3,"message":333}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":444444,"message":333}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":555555,"message":333}}"#,
-                r#"{{"src":"n1","dest":"c1","body":{{"type":"read_ok","msg_id":5,}}}}"#,
+                r#"{{"src":"n1","dest":"c1","body":{{"type":"read_ok","msg_id":5,"messages":[222,333]}}}}"#,
             ],
         }];
 
@@ -223,10 +229,7 @@ mod tests {
             let sent_str = String::from_utf8(sent).expect("Invalid UTF-8");
             let sent_lines: Vec<&str> = sent_str.lines().collect();
 
-            dbg!(&case.expected);
-            dbg!(&sent_lines);
-
-            assert_eq!(case.expected, sent_lines);
+            assert_json_eq!(json!(case.expected), json!(sent_lines));
         }
     }
 }
