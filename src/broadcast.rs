@@ -168,6 +168,7 @@ mod tests {
                     .expect("failed to get config");
 
                 let mut n = node::Node::<store::MemoryStore>::new(s);
+                n.init(String::from("n1"), vec![]);
                 n.neighborhood
                     .insert(String::from("n2"), node::Metadata { priority: 99 });
                 n.neighborhood
