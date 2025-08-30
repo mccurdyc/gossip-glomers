@@ -28,9 +28,6 @@ struct ReadRespData {
     messages: Vec<u32>,
 }
 
-// I use "untagged" in the following because the type tag differs based on the message.
-// I could split the Init message into a separate enum so that I could infer
-// the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
@@ -164,21 +161,12 @@ mod tests {
 
     #[test]
     fn broadcast() {
-        // TODO: these tests dont actually test that messages are broadcasted.
-        // They don't setup neighborhoods, etc.
-        //
-        // These tests need to be reworked to have full setups:
-        // get a topology message, get a broadcast, get a read, then assert.
-        // The assertion also needs to check that the neighbor nodes received the broadcast via a read.
-        // We only need to verify one layer of broadcasts, not broadcasts of broadcasts.
         let test_cases = vec![BroadcastCase {
             name: String::from("one"),
             setup: |s: &mut store::MemoryStore| -> Vec<u8> {
                 let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
                     .expect("failed to get config");
 
-                // TODO: needs to be instantiated with a neighborhood here since it's in an init
-                // message that instantiates a node's neighborhood.
                 let mut n = node::Node::<store::MemoryStore>::new(s);
                 n.neighborhood
                     .insert(String::from("n2"), node::Metadata { priority: 99 });
@@ -205,15 +193,9 @@ mod tests {
             // To assert that it sends a re-broadcast message. Instead of checking node states.
             expected: HashSet::from([
                 r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":1}}"#,
-                // TODO: this has the potential to race with the re-broadcasts
-                // We are iterating over a HashMap which is deliberately non-deterministic.
-                // In the tests, we don't care about order, just existence. So let's fix that.
-                // Do we use a HashMap instead of a Vec or some "vec contains" capability?
-                // Could use a HashSet for O(1) lookups!
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":2}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":222222,"message":222}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":333333,"message":222}}"#,
-                // TODO: this has the potential to race with the re-broadcasts
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":3}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":444444,"message":333}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":555555,"message":333}}"#,
