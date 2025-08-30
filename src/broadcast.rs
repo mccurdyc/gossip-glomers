@@ -153,16 +153,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use assert_json_diff::assert_json_eq;
-    use serde_json::json;
-
     use super::*;
-    use std::io::Cursor;
+    use std::{collections::HashSet, io::Cursor};
 
     struct BroadcastCase {
         name: String,
         setup: fn(&mut store::MemoryStore) -> Vec<u8>,
-        expected: Vec<&'static str>,
+        expected: HashSet<&'static str>,
     }
 
     #[test]
@@ -206,16 +203,22 @@ mod tests {
             },
             // We need to keep a list of messages that a node "sends".
             // To assert that it sends a re-broadcast message. Instead of checking node states.
-            expected: vec![
+            expected: HashSet::from([
                 r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":1}}"#,
+                // TODO: this has the potential to race with the re-broadcasts
+                // We are iterating over a HashMap which is deliberately non-deterministic.
+                // In the tests, we don't care about order, just existence. So let's fix that.
+                // Do we use a HashMap instead of a Vec or some "vec contains" capability?
+                // Could use a HashSet for O(1) lookups!
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":2,"message":222}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":222222,"message":222}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":333333,"message":222}}"#,
+                // TODO: this has the potential to race with the re-broadcasts
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":3,"message":333}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":444444,"message":333}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":555555,"message":333}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#,
-            ],
+            ]),
         }];
 
         for case in test_cases {
@@ -227,9 +230,15 @@ mod tests {
             let sent = (case.setup)(&mut s);
 
             let sent_str = String::from_utf8(sent).expect("Invalid UTF-8");
-            let sent_lines: Vec<&str> = sent_str.lines().collect();
+            let sent_lines: HashSet<&str> = HashSet::from_iter(sent_str.lines());
 
-            assert_json_eq!(json!(case.expected), json!(sent_lines));
+            assert_eq!(
+                case.expected,
+                sent_lines,
+                "Sets don't match: \n\tactual has {:#?}, \n\texpected has {:#?}\n",
+                sent_lines.difference(&case.expected).collect::<Vec<_>>(),
+                case.expected.difference(&sent_lines).collect::<Vec<_>>()
+            );
         }
     }
 }
