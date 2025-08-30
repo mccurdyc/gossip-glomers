@@ -210,11 +210,11 @@ mod tests {
                 // In the tests, we don't care about order, just existence. So let's fix that.
                 // Do we use a HashMap instead of a Vec or some "vec contains" capability?
                 // Could use a HashSet for O(1) lookups!
-                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":2,"message":222}}"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":2}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":222222,"message":222}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":333333,"message":222}}"#,
                 // TODO: this has the potential to race with the re-broadcasts
-                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":3,"message":333}}"#,
+                r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":3}}"#,
                 r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":444444,"message":333}}"#,
                 r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":555555,"message":333}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#,
