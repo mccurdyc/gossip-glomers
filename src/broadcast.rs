@@ -192,14 +192,17 @@ mod tests {
             },
             // We need to keep a list of messages that a node "sends".
             // To assert that it sends a re-broadcast message. Instead of checking node states.
+            // "Your node should propagate values it sees from broadcast messages to the
+            // other nodes in the cluster."
+            // https://fly.io/dist-sys/3b/
             expected: HashSet::from([
                 r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","in_reply_to":1}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":2}}"#,
-                r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":222222,"message":222}}"#,
-                r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":333333,"message":222}}"#,
+                r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":2,"message":222}}"#,
+                r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":2,"message":222}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"broadcast_ok","in_reply_to":3}}"#,
-                r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":444444,"message":333}}"#,
-                r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":555555,"message":333}}"#,
+                r#"{"src":"n1","dest":"n2","body":{"type":"broadcast","msg_id":3,"message":333}}"#,
+                r#"{"src":"n1","dest":"n3","body":{"type":"broadcast","msg_id":3,"message":333}}"#,
                 r#"{"src":"n1","dest":"c1","body":{"type":"read_ok","in_reply_to":5,"messages":[222,333]}}"#,
             ]),
         }];
