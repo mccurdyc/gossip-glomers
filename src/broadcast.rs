@@ -82,6 +82,19 @@ where
             )?;
         }
 
+        // TODO: the neighborhood that I define doesn't succeed in sharing messages a lot of
+        // messages are lost. Well we don't do anything to guarantee that node in the neighborhood
+        // actually successfully receives and stores the message. We just "trust" the maelstrom
+        // server to do this which we know is deliberately an unreliable transport.
+        //
+        // Does the maelstrom server respond to sources with the "broadcast_ok" message?
+        //
+        // Actually even with a single node broadcast, we can see the issues in history.txt
+        // 0,1 get stored then message 2 comes and only 1,2 are stored? why is 0 purged?
+        // Same once 3,4 come through; 1,2 get purged.
+        //
+        // Definitely seems like an issue with the store considering that this is a single-node
+        // broadcast.
         RequestBody::Broadcast { msg_id, message } => {
             for (k, _) in node.neighborhood.iter() {
                 io::to_writer(

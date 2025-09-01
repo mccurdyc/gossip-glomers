@@ -20,9 +20,6 @@ struct ReadData {
 
 type ReadResponse = Payload<ResponseBody<ReadData>>;
 
-// I use "untagged" in the following because the type tag differs based on the message.
-// I could split the Init message into a separate enum so that I could infer
-// the type based on different internal fields in the message body.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]

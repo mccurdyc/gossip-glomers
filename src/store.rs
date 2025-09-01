@@ -80,12 +80,14 @@ impl Seek for MemoryStore {
 
 #[derive(Debug)]
 pub struct FileStore {
-    // File does not buffer reads and writes. For efficiency, consider wrapping the file in a BufReader or BufWriter when performing many small read or write calls, unless unbuffered reads and writes are required.
+    // File does not buffer reads and writes. For efficiency, consider wrapping the file in a BufReader or BufWriter
+    // when performing many small read or write calls, unless unbuffered reads and writes are required.
     pub file: File,
     // The BufReader<R> struct adds buffering to any reader.
     // It can be excessively inefficient to work directly with a Read instance.
     // For example, every call to read on TcpStream results in a system call.
-    // A BufReader<R> performs large, infrequent reads on the underlying Read and maintains an in-memory buffer of the results.
+    // A BufReader<R> performs large, infrequent reads on the underlying Read and maintains an in-memory buffer of the
+    // results.
     inner: BufReader<File>, // Not Copy-safe.
 }
 
