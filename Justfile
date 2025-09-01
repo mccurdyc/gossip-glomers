@@ -41,10 +41,10 @@ docker-push: docker-build
 build challenge:
     cargo build --bin {{ challenge }} --release
 
-maelstrom-run challenge:
+maelstrom-run challenge *flags:
     rm -rf /tmp/store.txt
     just build {{ challenge }}
-    just "maelstrom-run-{{ challenge }}"
+    just maelstrom-run-{{ challenge }} {{ flags }}
 
 maelstrom-run-echo:
     {{ maelstrom_test_cmd }} \
@@ -63,21 +63,20 @@ maelstrom-run-unique:
       --availability total \
       --nemesis partition
 
-maelstrom-run-broadcast:
-    {{ maelstrom_test_cmd }} \
-      -w broadcast \
-      --bin ./target/release/broadcast \
-      --node-count 1 \
-      --time-limit 20 \
-      --rate 10
-
-maelstrom-run-broadcast-multi:
-    {{ maelstrom_test_cmd }} \
-      -w broadcast \
-      --bin ./target/release/broadcast \
-      --node-count 5 \
-      --time-limit 20 \
-      --rate 10
+maelstrom-run-broadcast multi="false":
+    #!{{ shebang }}
+      cmd="{{ maelstrom_test_cmd }} -w broadcast --bin ./target/release/broadcast"
+      if [ {{ multi }} != true ]; then
+      $cmd \
+        --node-count 1 \
+        --time-limit 20 \
+        --rate 10
+      else
+      $cmd \
+        --node-count 5 \
+        --time-limit 20 \
+        --rate 10;
+      fi
 
 maelstrom-run-counter:
     {{ maelstrom_test_cmd }} \
