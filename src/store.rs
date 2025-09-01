@@ -98,8 +98,7 @@ impl FileStore {
         // and one for reading. Primarily to avoid having to reset seek, etc.
         let w = std::fs::OpenOptions::new()
             .create(true)
-            .truncate(true)
-            .write(true)
+            .append(true)
             .open(p)?;
 
         let r = std::fs::OpenOptions::new().read(true).open(p)?;

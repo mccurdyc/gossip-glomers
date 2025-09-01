@@ -42,6 +42,7 @@ build challenge:
     cargo build --bin {{ challenge }} --release
 
 maelstrom-run challenge:
+    rm -rf /tmp/store.txt
     just build {{ challenge }}
     just "maelstrom-run-{{ challenge }}"
 
