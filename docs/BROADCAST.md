@@ -98,4 +98,22 @@ If we negate these two statements to guarantee spread of information we get the 
 
 # Implementation
 
-1. Consume the Topology message; don't consume the proposed topology, just the full list of nodes in the network
+## Using a Niave, Simple, Filesystem File Lock
+
+System File locking on every single message leads to severe congestion in a 5-node, 10RPS system.
+
+TODO: read LSPI p233, 1117
+
+We should prove that this is actually the point of congestion. I mean I'm pretty confident it is, but we
+should get some practice with Flamegraphs and (possibly) tracing instrumentation in Rust.
+
+Right now, we are doing the most niave way which would guarantee consistenty, but at an obvious cost to
+it's ability to process messages. We need to "dial back" consistency in order to support the rates of requests.
+
+At any time, a node can go offline or the network can go down. Instead of using a single, shared, store, each
+node could get a unique file. Then, we can drop locking. But then _we_ need to handle ensuring consistency
+instead of relying on the operating system file locking for consistency.
+
+For ensuring constency, we likely can't just rely on a single broadcast message being forwarded.
+We will have to some consensus. "What do you have?" / "Here's what I have.". But let's keep it simple first.
+Let's try just forwarding a single message with unique store files.

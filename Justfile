@@ -72,6 +72,7 @@ maelstrom-run-broadcast multi="false":
         --time-limit 20 \
         --rate 10
       else
+      # 5 nodes doing approximately 10rps.
       $cmd \
         --node-count 5 \
         --time-limit 20 \
