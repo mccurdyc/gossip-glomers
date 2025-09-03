@@ -79,7 +79,7 @@ impl Seek for MemoryStore {
 }
 
 #[derive(Debug)]
-pub struct FileStore {
+pub struct FileStore<'a> {
     // File does not buffer reads and writes. For efficiency, consider wrapping the file in a BufReader or BufWriter
     // when performing many small read or write calls, unless unbuffered reads and writes are required.
     pub file: File,
@@ -89,26 +89,35 @@ pub struct FileStore {
     // A BufReader<R> performs large, infrequent reads on the underlying Read and maintains an in-memory buffer of the
     // results.
     inner: BufReader<File>, // Not Copy-safe.
+    path: &'a Path,
 }
 
-impl Store for FileStore {}
-impl FileStore {
-    pub fn new(p: &Path) -> Result<Self, std::io::Error> {
+impl<'a> Store for FileStore<'a> {}
+impl<'a> FileStore<'a> {
+    pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
         // We have two separate file descriptors: one for writing
         // and one for reading. Primarily to avoid having to reset seek, etc.
         let w = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(p)?;
+            .open(path)?;
 
-        let r = std::fs::OpenOptions::new().read(true).open(p)?;
+        let r = std::fs::OpenOptions::new().read(true).open(path)?;
 
         let inner = BufReader::new(r);
-        Ok(FileStore { file: w, inner })
+        Ok(FileStore {
+            file: w,
+            inner,
+            path,
+        })
+    }
+
+    pub fn path(&self) -> &'a Path {
+        self.path
     }
 }
 
-impl Write for FileStore {
+impl Write for FileStore<'_> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let s = self.file.write(buf)?;
@@ -133,7 +142,7 @@ impl Write for FileStore {
     }
 }
 
-impl Read for FileStore {
+impl Read for FileStore<'_> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let u = self.inner.read(buf);
@@ -144,7 +153,7 @@ impl Read for FileStore {
 }
 
 // Inspiration - https://doc.rust-lang.org/src/std/io/stdio.rs.html#546
-impl BufRead for FileStore {
+impl BufRead for FileStore<'_> {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.inner.fill_buf()
     }
@@ -162,7 +171,7 @@ impl BufRead for FileStore {
     }
 }
 
-impl Seek for FileStore {
+impl Seek for FileStore<'_> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         // seeks the file cursor for writing
         self.file.seek(pos)?;

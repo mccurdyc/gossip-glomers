@@ -47,10 +47,7 @@ impl<'a, S: store::Store> Node<'a, S> {
         }
     }
 
-    pub fn init(&mut self, node_id: String, node_ids: Vec<String>)
-    where
-        S: store::Store,
-    {
+    pub fn init(&mut self, node_id: String, node_ids: Vec<String>) {
         self.msg_id = 1;
         self.id = node_id;
         self.neighborhood = HashMap::new();
