@@ -138,3 +138,21 @@ Was thinking of bloom filters for the "seen states" then we could compare hashes
 What if state is on the message instead of storing "share state"
 
 Messages would be "heavier" than necessary.
+
+## "Leaderless", "strangers", message (relevancy) lifetimes, sync intervals and (optional) eventually-(rarely)-consistent global state.
+
+> ![NOTE]
+> Think X is having a kid or getting married and how this information spreads.
+>
+> (mostly because I'm hearing these a lot right now at this time in my life).
+
+"Hey, I haven't seen you in a while! Have you heard?", "Yeah, I heard from Alice (and Bob)"
+
+"Oh, so Alice and Bob must also be aware, good to know. Then, if I ever talk to Alice and Bob
+I don't have to tell them X."
+
+In this challenge we don't need global consistency, just locally consistent with what maelstrom knows
+they sent us, specifically.
+
+There's time to read the literature (when you NEED to accomplish a goal) and there are times for playing
+and thinking on your own. Before information was easily, immediately, globally accessible, folks played more.
