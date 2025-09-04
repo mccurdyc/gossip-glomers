@@ -117,3 +117,24 @@ instead of relying on the operating system file locking for consistency.
 For ensuring constency, we likely can't just rely on a single broadcast message being forwarded.
 We will have to some consensus. "What do you have?" / "Here's what I have.". But let's keep it simple first.
 Let's try just forwarding a single message with unique store files.
+
+Okay, another really cool thing to experience! We are learning from first principles! We see how a message in
+indefinitely gossiped. A single `message: 0` is sent to a node, it sends it to it's neighbors which in turn
+send it to theirs ad infinitum. We need a base case i.e., a way to say "I've seen this" and/or for nodes to share
+their states.
+
+Maybe a node keeps track of "share state" of a message in its store also:
+
+0: [] - i've seen
+0: [1] - i've seen and shared with node 1
+0: [1,2] - i've seen and shared with node 1 and node 2
+
+We don't need to guarantee that they've actually recorded the message, just that we've sent it.
+
+Was thinking of bloom filters for the "seen states" then we could compare hashes across nodes.
+
+## Messages have a "depth"
+
+What if state is on the message instead of storing "share state"
+
+Messages would be "heavier" than necessary.

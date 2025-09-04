@@ -47,6 +47,53 @@ enum RequestBody {
     Other,
 }
 
+struct BroadcastMessage {
+    msg_id: u32,
+    src: String,
+    message: u32,
+}
+
+fn broadcast_naive<W, S>(
+    node: &mut node::Node<S>,
+    writer: &mut W,
+    msg: BroadcastMessage,
+) -> Result<()>
+where
+    W: Write,
+    S: store::Store + std::fmt::Debug,
+{
+    for (k, _) in node.neighborhood.iter() {
+        io::to_writer(
+            writer,
+            &Payload {
+                src: node.id.clone(),
+                dest: k.to_owned(),
+                body: RequestBody::Broadcast {
+                    msg_id: msg.msg_id,
+                    message: msg.message,
+                },
+            },
+        )?;
+    }
+
+    // Stores the message in the Store to later be served by a read().
+    serde_json::ser::to_writer(&mut node.store, &msg.message)?;
+    writeln!(node.store)?;
+
+    io::to_writer(
+        writer,
+        &Payload {
+            src: node.id.clone(),
+            dest: msg.src,
+            body: ResponseBody::<()> {
+                typ: "broadcast_ok".to_string(),
+                in_reply_to: msg.msg_id,
+                data: None,
+            },
+        },
+    )
+}
+
 pub fn listen<R, W, T, S>(
     node: &mut node::Node<S>,
     reader: R,
@@ -82,35 +129,15 @@ where
             )?;
         }
 
-        RequestBody::Broadcast { msg_id, message } => {
-            for (k, _) in node.neighborhood.iter() {
-                io::to_writer(
-                    writer,
-                    &Payload {
-                        src: node.id.clone(),
-                        dest: k.to_owned(),
-                        body: RequestBody::Broadcast { msg_id, message },
-                    },
-                )?;
-            }
-
-            // Stores the message in the Store to later be served by a read().
-            serde_json::ser::to_writer(&mut node.store, &message)?;
-            writeln!(node.store)?;
-
-            io::to_writer(
-                writer,
-                &Payload {
-                    src: msg.dest,
-                    dest: msg.src,
-                    body: ResponseBody::<()> {
-                        typ: "broadcast_ok".to_string(),
-                        in_reply_to: msg_id,
-                        data: None,
-                    },
-                },
-            )?;
-        }
+        RequestBody::Broadcast { msg_id, message } => broadcast_naive(
+            node,
+            writer,
+            BroadcastMessage {
+                src: msg.src,
+                msg_id,
+                message,
+            },
+        )?,
 
         RequestBody::Read { msg_id } => {
             // Make sure we reset the file offset
