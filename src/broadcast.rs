@@ -1,9 +1,11 @@
 use crate::payload::{Payload, ResponseBody};
 use crate::{config, io, node, store};
 use anyhow::Result;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Write};
+use std::time::SystemTime;
 use tracing::info;
 
 // In this challenge, you’ll need to implement a broadcast system that gossips
@@ -39,6 +41,8 @@ enum RequestBody {
     Broadcast {
         msg_id: u32,
         message: u32,
+        expiration: Option<SystemTime>,
+        state: Option<MessageState>,
     },
     Read {
         msg_id: u32,
@@ -51,6 +55,16 @@ struct BroadcastMessage {
     msg_id: u32,
     src: String,
     message: u32,
+    expiration: SystemTime,
+    state: MessageState,
+}
+
+// I dont want global state syncing. I want state to be entirely filled by the message
+// sharing protocol. I do believe if you are good enough at sharing messages you don't need
+// to sync states. You don't ask someone "what all do you know?" you say, "have you heard X?"
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct MessageState {
+    seen_by: HashSet<String>,
 }
 
 fn broadcast_naive<W, S>(
@@ -71,6 +85,8 @@ where
                 body: RequestBody::Broadcast {
                     msg_id: msg.msg_id,
                     message: msg.message,
+                    expiration: Some(msg.expiration.clone()),
+                    state: Some(msg.state.clone()),
                 },
             },
         )?;
@@ -92,6 +108,53 @@ where
             },
         },
     )
+}
+
+fn anthropomorphic_gossip<W, S>(
+    node: &mut node::Node<S>,
+    writer: &mut W,
+    mut msg: BroadcastMessage,
+) -> Result<()>
+where
+    W: Write,
+    S: store::Store + std::fmt::Debug,
+{
+    // 1/ messages need to have a relevancy TTL or expiration
+    if SystemTime::now().lt(&msg.expiration) {
+        // 2/ nodes store where they heard about a message and this occurs before sending to neighbors
+        // so that a node doesn't send a message back to the neighbor that sent the message.
+        msg.state.seen_by.insert(msg.src);
+
+        // 3/ a node has a neighborhood that it needs to communicate with as long as the message
+        // hasn't expired its relevancy.
+        for (k, _) in node.neighborhood.iter() {
+            // don't send the message to a node that has been confirmed to have seen the message
+            if msg.state.seen_by.contains(k) {
+                continue;
+            }
+
+            io::to_writer(
+                writer,
+                &Payload {
+                    src: node.id.clone(),
+                    dest: k.to_owned(),
+                    body: RequestBody::Broadcast {
+                        msg_id: msg.msg_id,
+                        message: msg.message,
+                        expiration: Some(msg.expiration.clone()),
+                        state: Some(msg.state.clone()),
+                    },
+                },
+            )?;
+        }
+    }
+
+    // 4/ TODO: strangers come from a node's "world" at random
+
+    // 5/ nodes need to maintain a state store for their view of the world's state or for now their neighborhood's state
+    serde_json::ser::to_writer(&mut node.store, &msg.msg_id)?;
+
+    Ok(())
 }
 
 pub fn listen<R, W, T, S>(
@@ -129,13 +192,31 @@ where
             )?;
         }
 
-        RequestBody::Broadcast { msg_id, message } => broadcast_naive(
+        RequestBody::Broadcast {
+            msg_id,
+            message,
+            expiration,
+            state,
+        } => anthropomorphic_gossip(
             node,
             writer,
             BroadcastMessage {
-                src: msg.src,
+                src: msg.src.clone(),
                 msg_id,
                 message,
+                // expiration is set by the first gossip node
+                expiration: expiration.unwrap_or_else(|| {
+                    let random_seconds = rand::rng().random_range(1..=5); // 1 to 5 inclusive
+                    SystemTime::now() + std::time::Duration::from_secs(random_seconds)
+                }),
+                // if state is empty it's likely due to this being the first gossip node receiving
+                // the message from a maelstrom server node.
+                state: state.unwrap_or_else(|| {
+                    let mut seen_by: HashSet<String> = HashSet::new();
+                    seen_by.insert(msg.src);
+
+                    MessageState { seen_by }
+                }),
             },
         )?,
 
