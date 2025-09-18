@@ -26,12 +26,7 @@ enum Message {
     Other(UnhandledMessage),
 }
 
-pub fn listen<R, W, T, S>(
-    _node: &mut node::Node<S>,
-    reader: R,
-    writer: &mut W,
-    cfg: &config::Config<T>,
-) -> Result<()>
+pub fn listen<R, W, S, T>(node: &mut node::Node<S, T>, reader: R, writer: &mut W) -> Result<()>
 where
     R: BufRead,
     W: Write,
@@ -45,7 +40,13 @@ where
     match msg {
         Message::Unique(Payload { src, dest, body }) => {
             let hash = Sha256::digest(
-                format!("{}-{}-{:?}", dest, body.msg_id, cfg.time_source.now()).into_bytes(),
+                format!(
+                    "{}-{}-{:?}",
+                    dest,
+                    body.msg_id,
+                    node.config.time_source.now()
+                )
+                .into_bytes(),
             );
             io::to_writer(
                 writer,
@@ -73,14 +74,7 @@ where
 mod tests {
     use super::*;
     use config;
-    use std::io::Cursor;
-
-    struct MockTime;
-    impl config::TimeSource for MockTime {
-        fn now(&self) -> std::time::SystemTime {
-            std::time::SystemTime::UNIX_EPOCH
-        }
-    }
+    use std::{io::Cursor, time};
 
     #[test]
     fn unique() {
@@ -88,21 +82,24 @@ mod tests {
             (
                 r#"{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
 "#,
-                r#"{"src":"n1","dest":"c1","body":{"type":"generate_ok","in_reply_to":1,"id":"979f89fa9ea19c49f86ff60ea893db2d66df54d8bba01bd024ca2b837d731c6a"}}
+                r#"{"src":"n1","dest":"c1","body":{"type":"generate_ok","in_reply_to":1,"id":"39aad17b38518d281d14ecc2f69dbc0543abb25dae1902103c5ff8bcb8f2bbc5"}}
 "#,
             ),
             (
                 r#"{"src":"f11","dest":"z10","body":{"type":"generate","msg_id":99}}
 "#,
-                r#"{"src":"z10","dest":"f11","body":{"type":"generate_ok","in_reply_to":99,"id":"575302209a4a1459a01354f6791242f5cf469f6f0a407788f61bb4c2bf3299d0"}}
+                r#"{"src":"z10","dest":"f11","body":{"type":"generate_ok","in_reply_to":99,"id":"00dcdad3d0f0194c773360ea91e706857704d042ce54dfafa45411afc325afd9"}}
 "#,
             ),
         ];
 
         let buf: Vec<u8> = Vec::new();
         let mut s = store::MemoryStore::new(buf).expect("failed to create store");
-        let cfg = config::Config::<MockTime>::new(&MockTime {}).expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+        let cfg = config::Config::<config::MockTime>::new(config::MockTime {
+            now: time::UNIX_EPOCH + time::Duration::from_secs(1757680326),
+        })
+        .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore, config::MockTime> = node::Node::new(&mut s, cfg);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -110,7 +107,7 @@ mod tests {
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
 
-            listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
+            listen(&mut n, read_cursor, &mut write_cursor).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
         }

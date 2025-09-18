@@ -24,12 +24,7 @@ enum Message {
     Other(HashMap<String, serde_json::Value>),
 }
 
-pub fn listen<R, W, T, S>(
-    _node: &mut node::Node<S>,
-    reader: R,
-    writer: &mut W,
-    _cfg: &config::Config<T>,
-) -> Result<()>
+pub fn listen<R, W, T, S>(_node: &mut node::Node<S, T>, reader: R, writer: &mut W) -> Result<()>
 where
     R: BufRead,
     W: Write,
@@ -64,7 +59,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use std::{io::Cursor, time};
 
     #[test]
     fn echo() {
@@ -85,9 +80,11 @@ mod tests {
 
         let buf: Vec<u8> = Vec::new();
         let mut s = store::MemoryStore::new(buf).expect("failed to create store");
-        let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
-            .expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+        let cfg = config::Config::<config::MockTime>::new(config::MockTime {
+            now: time::UNIX_EPOCH + time::Duration::from_secs(1757680326),
+        })
+        .expect("failed to get config");
+        let mut n: node::Node<store::MemoryStore, config::MockTime> = node::Node::new(&mut s, cfg);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes
@@ -95,7 +92,7 @@ mod tests {
             let mut write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
 
-            listen(&mut n, read_cursor, &mut write_cursor, &cfg).expect("listen failed");
+            listen(&mut n, read_cursor, &mut write_cursor).expect("listen failed");
 
             assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());
         }

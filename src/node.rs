@@ -11,13 +11,13 @@ pub struct Metadata {
     pub priority: u8,
 }
 
-#[derive(Debug)]
-pub struct Node<'a, S: store::Store> {
+pub struct Node<'a, S: store::Store, T: config::TimeSource> {
     pub id: String, // include it as the src of any message it sends.
     pub msg_id: u32,
     pub world: HashMap<String, Metadata>,
     pub neighborhood: HashMap<String, Metadata>,
     pub store: &'a mut S,
+    pub config: config::Config<T>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,8 +33,8 @@ enum RequestBody {
     Other,
 }
 
-impl<'a, S: store::Store> Node<'a, S> {
-    pub fn new(s: &'a mut S) -> Self
+impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
+    pub fn new(s: &'a mut S, config: config::Config<T>) -> Self
     where
         S: store::Store,
     {
@@ -44,6 +44,7 @@ impl<'a, S: store::Store> Node<'a, S> {
             world: std::default::Default::default(),
             neighborhood: std::default::Default::default(),
             store: s,
+            config,
         }
     }
 
@@ -74,18 +75,11 @@ impl<'a, S: store::Store> Node<'a, S> {
         }
     }
 
-    pub fn run<R, W, F, T>(
-        &mut self,
-        reader: R,
-        mut writer: W,
-        f: F,
-        cfg: config::Config<T>,
-    ) -> Result<()>
+    pub fn run<R, W, F>(&mut self, reader: R, mut writer: W, f: F) -> Result<()>
     where
         R: BufRead,
         W: Write,
-        F: Fn(&mut node::Node<S>, Box<dyn BufRead>, &mut W, &config::Config<T>) -> Result<()>,
-        T: config::TimeSource,
+        F: Fn(&mut node::Node<S, T>, Box<dyn BufRead>, &mut W) -> Result<()>,
         S: store::Store,
     {
         info!("starting listener...");
@@ -100,6 +94,8 @@ impl<'a, S: store::Store> Node<'a, S> {
 
                 // Match based on the type.
                 match msg.body {
+                    // TODO: im thinking this should be moved into the listener as this ends up
+                    // being helpful for tests.
                     RequestBody::Init {
                         msg_id,
                         node_id,
@@ -123,7 +119,7 @@ impl<'a, S: store::Store> Node<'a, S> {
 
                     RequestBody::Other => {
                         let buf = Box::new(Cursor::new(l));
-                        match f(self, buf, &mut writer, &cfg) {
+                        match f(self, buf, &mut writer) {
                             Ok(_) => {}
                             Err(e) => {
                                 error!("error listening: {:?}", e);
@@ -144,6 +140,7 @@ mod tests {
     use crate::{config, echo, node, store};
     use once_cell::sync::Lazy;
     use std::io::Cursor;
+    use std::time;
     use std::vec::Vec;
 
     // Ensure that the `tracing` stack is only initialised once using `once_cell`
@@ -178,16 +175,19 @@ mod tests {
         for (input, expected) in test_cases {
             let buf: Vec<u8> = Vec::new();
             let mut s = store::MemoryStore::new(buf).expect("failed to create store");
-            let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
-                .expect("failed to get config");
-            let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+            let cfg = config::Config::<config::MockTime>::new(config::MockTime {
+                now: time::SystemTime::UNIX_EPOCH + time::Duration::from_secs(1757680326),
+            })
+            .expect("failed to get config");
+            let mut n: node::Node<store::MemoryStore, config::MockTime> =
+                node::Node::new(&mut s, cfg);
 
             // Necessary to implement Read trait on BufReader for bytes
             let mut vec: Vec<u8> = Vec::new();
             let write_cursor = Cursor::new(&mut vec);
             let read_cursor = Cursor::new(input.as_bytes());
 
-            n.run(read_cursor, write_cursor, echo::listen, cfg)
+            n.run(read_cursor, write_cursor, echo::listen)
                 .expect("Node did NOT run");
 
             assert_eq!(String::from_utf8(vec).unwrap().trim(), expected.trim());

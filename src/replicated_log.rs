@@ -132,12 +132,7 @@ enum Message {
     Other(HashMap<String, serde_json::Value>),
 }
 
-pub fn listen<R, W, T, S>(
-    node: &mut node::Node<S>,
-    reader: R,
-    writer: &mut W,
-    _cfg: &config::Config<T>,
-) -> Result<()>
+pub fn listen<R, W, T, S>(node: &mut node::Node<S, T>, reader: R, writer: &mut W) -> Result<()>
 where
     R: BufRead,
     W: Write,

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // Generic payload wrapper for all message types
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub struct Payload<T> {
     pub src: String,
@@ -21,7 +21,7 @@ pub struct RequestBody<T> {
 }
 
 // Generic response body with common fields
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ResponseBody<T> {
     #[serde(rename = "type")]
     pub typ: String,

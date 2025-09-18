@@ -10,10 +10,10 @@ fn main() {
 
     let buf: Vec<u8> = Vec::new();
     let mut s = store::MemoryStore::new(buf).expect("failed to create store");
-    let cfg = config::Config::<config::SystemTime>::new(&config::SystemTime {})
+    let cfg = config::Config::<config::SystemTime>::new(config::SystemTime {})
         .expect("failed to get config");
-    let mut n: node::Node<store::MemoryStore> = node::Node::new(&mut s);
+    let mut n: node::Node<store::MemoryStore, config::SystemTime> = node::Node::new(&mut s, cfg);
 
-    n.run(io::stdin().lock(), io::stdout().lock(), unique::listen, cfg)
+    n.run(io::stdin().lock(), io::stdout().lock(), unique::listen)
         .expect("failed to start");
 }

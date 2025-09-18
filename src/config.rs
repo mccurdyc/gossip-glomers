@@ -11,13 +11,23 @@ impl TimeSource for SystemTime {
     }
 }
 
-pub struct Config<'a, T: TimeSource> {
-    // This is where we set the TYPE of timesource
-    pub time_source: &'a T,
+pub struct MockTime {
+    pub now: std::time::SystemTime,
 }
 
-impl<'a, T: TimeSource> Config<'a, T> {
-    pub fn new(time_source: &'a T) -> Result<Self, anyhow::Error> {
+impl TimeSource for MockTime {
+    fn now(&self) -> std::time::SystemTime {
+        self.now
+    }
+}
+
+pub struct Config<T: TimeSource> {
+    // This is where we set the TYPE of timesource
+    pub time_source: T,
+}
+
+impl<T: TimeSource> Config<T> {
+    pub fn new(time_source: T) -> Result<Self, anyhow::Error> {
         Ok(Config { time_source })
     }
 }
