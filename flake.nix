@@ -294,7 +294,6 @@
             # you need to guarantee they use the same Tust version as defined
             # in rustVersion.
             pkgs.openssl
-            pkgs.rust-analyzer
 
             # Maelstrom
             pkgs.jdk23_headless
