@@ -10,9 +10,10 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # For a pure binary installation of the Rust toolchain
+    # ref: https://github.com/oxidecomputer/omicron/blob/main/flake.nix
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
   };
 
@@ -31,10 +32,11 @@
         # v = "1.80.1";
         v = "latest";
         rustChannel = "stable";
-        # rustChannel = nightly
-        # rustChannel = beta
-        pinnedRust = pkgs.rust-bin.${rustChannel}.${v}.default.override {
+        pinnedRust = pkgs-unstable.rust-bin.${rustChannel}.${v}.default.override {
           extensions = [
+            # The Rust standard library source code isn't included with the stable
+            # Rust toolchain by default. When you try to jump to definition for stdlib
+            # functions, rust-analyzer needs access to the actual source code to show you the implementation.
             "rust-src"
             "rust-analyzer"
           ];
@@ -273,7 +275,7 @@
           nativeBuildInputs = with pkgs; [
             gcc
           ];
-          buildInputs = with pkgs; [
+          buildInputs = [
             pinnedRust
           ] ++ self.checks.${system}.pre-commit-check.enabledPackages;
 
