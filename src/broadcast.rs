@@ -141,7 +141,6 @@ where
         seen_by: HashSet::<String>::new(),
     });
 
-    // TODO: maybe cfg becomes a field on Node?
     if node.config.time_source.now() < expiration {
         // 2/ nodes store where they heard about a message and this occurs before sending to neighbors
         // so that a node doesn't send a message back to the neighbor that sent the message.
@@ -175,19 +174,6 @@ where
 
     // 5/ nodes need to maintain a state store for their view of the world's state or for now their neighborhood's state
     serde_json::ser::to_writer(&mut node.store, &msg.msg_id)?;
-    io::to_writer(
-        writer,
-        &Payload {
-            src: node.id.clone(),
-            dest: msg.src.clone(),
-            body: RequestBody::Broadcast {
-                msg_id: msg.msg_id,
-                message: msg.message,
-                expiration: None, // TODO: why is this None?
-                state: None,      // TODO: why is this None?
-            },
-        },
-    )?;
 
     io::to_writer(
         writer,
@@ -421,11 +407,66 @@ mod tests {
                         },
                     })
                     .expect("serializing expected message 3 as json should work"),
-                    // serde_json::to_string(&Payload{src:String::from("n1"),dest:String::from("n3"),body:ResponseBody::<>{typ:String::from("broadcast"),data: {msg_id:2,message:222,expiration,seen_by:["c1"]}}}).expect("serializing expected message 4 as json should work"),
-                    // serde_json::to_string(&Payload{src:String::from("n1"),dest:String::from("c1"),body:ResponseBody::<()>{typ:String::from("broadcast_ok"),in_reply_to:3}}).expect("serializing expected message 5 as json should work"),
-                    // serde_json::to_string(&Payload{src:String::from("n1"),dest:String::from("n2"),body:ResponseBody::<>{typ:String::from("broadcast"),msg_id:3,message:333,expiration,seen_by:["c1"]}}).expect("serializing expected message 6 as json should work"),
-                    // serde_json::to_string(&Payload{src:String::from("n1"),dest:String::from("n3"),body:ResponseBody::<>{typ:String::from("broadcast"),msg_id:3,message:333,expiration,seen_by:["c1"]}}).expect("serializing expected message 7 as json should work"),
-                    // serde_json::to_string(&Payload{src:String::from("n1"),dest:String::from("c1"),body:ResponseBody::<()>{typ:String::from("read_ok"),in_reply_to:5,messages:[2,3]}}).expect("serializing expected message 8 as json should work"),
+                    serde_json::to_string(&Payload {
+                        src: String::from("n1"),
+                        dest: String::from("n3"),
+                        body: RequestBody::Broadcast {
+                            msg_id: 2,
+                            message: 222,
+                            expiration: Some(expiration),
+                            state: Some(MessageState {
+                                seen_by: HashSet::from([String::from("c1")]),
+                            }),
+                        },
+                    })
+                    .expect("serializing expected message 4 as json should work"),
+                    serde_json::to_string(&Payload {
+                        src: String::from("n1"),
+                        dest: String::from("c1"),
+                        body: ResponseBody::<()> {
+                            typ: String::from("broadcast_ok"),
+                            in_reply_to: 3,
+                            data: None,
+                        },
+                    })
+                    .expect("serializing expected message 5 as json should work"),
+                    serde_json::to_string(&Payload {
+                        src: String::from("n1"),
+                        dest: String::from("n2"),
+                        body: RequestBody::Broadcast {
+                            msg_id: 3,
+                            message: 333,
+                            expiration: Some(expiration),
+                            state: Some(MessageState {
+                                seen_by: HashSet::from([String::from("c1")]),
+                            }),
+                        },
+                    })
+                    .expect("serializing expected message 6 as json should work"),
+                    serde_json::to_string(&Payload {
+                        src: String::from("n1"),
+                        dest: String::from("n3"),
+                        body: RequestBody::Broadcast {
+                            msg_id: 3,
+                            message: 333,
+                            expiration: Some(expiration),
+                            state: Some(MessageState {
+                                seen_by: HashSet::from([String::from("c1")]),
+                            }),
+                        },
+                    })
+                    .expect("serializing expected message 7 as json should work"),
+                    serde_json::to_string(&Payload {
+                        src: String::from("n1"),
+                        dest: String::from("c1"),
+                        body: ResponseBody::<ReadRespData> {
+                            typ: String::from("read_ok"),
+                            in_reply_to: 5,
+                            // TODO: why is this formatted as 23 instead of 2,3?
+                            data: Some(ReadRespData { messages: vec![23] }),
+                        },
+                    })
+                    .expect("serializing expected message 8 as json should work"),
                 ])
             },
         }];
