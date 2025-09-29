@@ -2,7 +2,7 @@ use crate::{config, io, node, payload, store};
 use anyhow::Result;
 use payload::Payload;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Cursor, Write};
 use tracing::{error, info};
 
@@ -16,6 +16,13 @@ pub struct Node<'a, S: store::Store, T: config::TimeSource> {
     pub msg_id: u32,
     pub world: HashMap<String, Metadata>,
     pub neighborhood: HashMap<String, Metadata>,
+    // Do we use a HashSet (empty values) or HashMap with a value of `seen_by`?
+    // Do we persist `seen_by`? - Initial thought is no, because we aren't going to be replaying
+    //
+    // old messages at this point, so we don't really care about those old messages. If we see an
+    // old message again, I think it's safe to assume our neighborhood hasn't seen it until we
+    // rebuild the "seen_by" state.
+    pub(crate) seen: HashSet<u32>,
     pub store: &'a mut S,
     pub config: config::Config<T>,
 }
@@ -43,6 +50,7 @@ impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
             msg_id: std::default::Default::default(),
             world: std::default::Default::default(),
             neighborhood: std::default::Default::default(),
+            seen: std::default::Default::default(),
             store: s,
             config,
         }
@@ -79,7 +87,7 @@ impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
     where
         R: BufRead,
         W: Write,
-        F: Fn(&mut node::Node<S, T>, Box<dyn BufRead>, &mut W) -> Result<()>,
+        F: Fn(&mut node::Node<'a, S, T>, Box<dyn BufRead>, &mut W) -> Result<()>,
         S: store::Store,
     {
         info!("starting listener...");

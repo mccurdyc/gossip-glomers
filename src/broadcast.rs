@@ -135,7 +135,7 @@ where
     // 1/ messages need to have a relevancy TTL or expiration
     let expiration = msg
         .expiration
-        .unwrap_or_else(|| SystemTime::now() + Duration::from_millis(100));
+        .unwrap_or_else(|| SystemTime::now() + Duration::from_secs(3));
 
     let mut message_state = msg.state.unwrap_or_else(|| MessageState {
         seen_by: HashSet::<String>::new(),
@@ -172,20 +172,11 @@ where
 
     // 4/ TODO: strangers come from a node's "world" at random
 
-    // 5/ nodes need to maintain a state store for their view of the world's state or for now their neighborhood's state
-    //
-    // TODO(bug) - we are just writing a message id to the store. No newlines, etc
-    // What all do we actually care to persist to the store? Is it just the message id?
-    //
-    // Probably append-only, newline delimited, object
-    //
-    // Do we persist `seen_by`? - Initial thought is no, because we aren't going to be replaying
-    //
-    // old messages at this point, so we don't really care about those old messages. If we see an
-    // old message again, I think it's safe to assume our neighborhood hasn't seen it until we
-    // rebuild the "seen_by" state.
-    serde_json::ser::to_writer(&mut node.store, &msg.msg_id)?;
-    writeln!(&mut node.store)?;
+    // 5/ Persist unique values to the store.
+    if node.seen.insert(msg.msg_id) {
+        serde_json::ser::to_writer(&mut node.store, &msg.msg_id)?;
+        writeln!(&mut node.store)?;
+    }
 
     io::to_writer(
         writer,
@@ -504,19 +495,18 @@ mod tests {
             }
             .now();
 
-            let sent = (case.setup)(&mut s, expiration);
-
-            let sent_str = String::from_utf8(sent).expect("Invalid UTF-8");
-            let sent_lines: HashSet<String> =
-                HashSet::from_iter(sent_str.lines().map(|s| s.to_string()));
+            let response = (case.setup)(&mut s, expiration);
+            let response_str = String::from_utf8(response).expect("Invalid UTF-8");
+            let actual: HashSet<String> =
+                HashSet::from_iter(response_str.lines().map(|s| s.to_string()));
             let expected = (case.expected)(expiration);
 
             assert_eq!(
                 expected,
-                sent_lines,
+                actual,
                 "Sets don't match: \n\tactual has (expected doesn't) {:#?}, \n\texpected has (actual doesn't) {:#?}\n",
-                sent_lines.difference(&expected).collect::<Vec<_>>(),
-                expected.difference(&sent_lines).collect::<Vec<_>>()
+                actual.difference(&expected).collect::<Vec<_>>(),
+                expected.difference(&actual).collect::<Vec<_>>()
             );
         }
     }
