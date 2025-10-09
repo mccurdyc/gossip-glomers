@@ -5,6 +5,35 @@ just maelstrom-run broadcast true
 # fails
 ```
 
+## Migrating to Async
+
+```
+main()
+ - inTx, inRx = mpsc::chan
+ - outTx, outRx = mpsc::chan
+
+async run(stdin, stdout, inTx, outRx)
+ - reads from stdin
+ - writes to inTx (consumed by listen)
+ - reads from outRx
+ - writes to stdout
+
+async node.listen(inRx, outTx, store)
+ - reads from inRx
+ - decides who and whether to broadcast
+ - takes lock of store
+ - writes to store
+ - writes to outTx
+
+async node.sync(cloned outTx, store)
+ - takes lock of store
+ - reads deltas since last read of store
+ - maintains some in-memory state of the world
+ - if memory is empty, send full state of the world (handle process restarts)
+ - decides who to broadcast to
+ - writes to outTx
+```
+
 ## Handle Node being offline longer than the timeout and/or message expiration.
 
 One thought was a node announces, "hey, I'm back"
@@ -20,6 +49,15 @@ are left asking "how do I recover from being offline?".
 Maybe you ask a few random (all?) neighbors, "hey what all have you seen?". Maybe there are checkpoints
 too so that you don't ask them about the same thing again if you go offline twice. "What
 all have you seen since last time we spoke?".
+
+How does a node know that it has been offline? If it hasn't recorded a message in a while?
+Or, do we just have an async "sync interval" where a node tries to ensure that it's aligned
+with its neighborhood?
+
+Alternatively, instead of forwarding broadcast messages, maybe these end up becoming "sync
+messages" where we sync deltas since last sync interval.
+
+Let's play with Merkle Trees.
 
 ## Async Flush to disk
 
