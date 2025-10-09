@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
     //  - decides who to broadcast to
     //  - writes to outTx
 
-    let mut n: node::Node<store::FileStore, config::SystemTime> = node::Node::new(s, cfg);
+    let mut n: node::Node<store::FileStore, config::SystemTime> = node::Node::new(&mut s, cfg);
 
     n.run(io::stdin().lock(), io::stdout().lock(), broadcast::listen)
         .expect("failed to start");
