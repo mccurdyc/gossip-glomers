@@ -1,12 +1,13 @@
 use app::{broadcast, config, node, store};
 use std::io;
 use tempfile::NamedTempFile;
+use tokio::sync::mpsc;
 use tracing::info;
 
 // The worker_threads option configures the number of worker threads, and defaults
 // to the number of cpus on the system.
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     // Initialize the default subscriber, which logs to stdout
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr) // all debug logs have to go to stderr
@@ -23,35 +24,32 @@ async fn main() -> anyhow::Result<()> {
     let cfg = config::Config::<config::SystemTime>::new(config::SystemTime {})
         .expect("failed to get config");
 
-    // main()
-    //  - inTx, inRx = mpsc::chan
-    //  - outTx, outRx = mpsc::chan
+    //  We use unbounded channels because we don't need guarantees.
+    //  that's the purpose of the gossip protocol in the first place is to proceed w/o guarantees.
     //
-    // async run(stdin, stdout, inTx, outRx)
-    //  - reads from stdin
-    //  - writes to inTx (consumed by listen)
-    //  - reads from outRx
-    //  - writes to stdout
+    //  Although, I think I may want to use a bounded channel of capacity 1 to keep operations more
+    //  synchronous. Especially due to the synchronous nature of IO.
     //
-    // async node.listen(inRx, outTx, store)
-    //  - reads from inRx
-    //  - decides who and whether to broadcast
-    //  - takes lock of store
-    //  - writes to store
-    //  - writes to outTx
-    //
-    // async node.sync(cloned outTx, store)
-    //  - takes lock of store
-    //  - reads deltas since last read of store
-    //  - maintains some in-memory state of the world
-    //  - if memory is empty, send full state of the world (handle process restarts)
-    //  - decides who to broadcast to
-    //  - writes to outTx
+    //  Additionally, we use mspc instead of broadcast or watch channels b/c we are interacting
+    //  with naturally synchronous resources (IO-bound and not CPU bound) and the thought was
+    //  that we would end up fighting over IO resource locks anyway. Might be a future improvement
+    //  to "fan out". We should look into the tokio::io and tokio::fs modules
+    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Payload<RequestBody<T>>>();
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Payload<ResponseBody<T>>>();
 
     let mut n: node::Node<store::FileStore, config::SystemTime> = node::Node::new(&mut s, cfg);
 
-    n.run(io::stdin().lock(), io::stdout().lock(), broadcast::listen)
-        .expect("failed to start");
+    let listen = tokio::spawn(async move {
+        let read = read(io::stdin().lock(), in_tx).await;
+        let listen = broadcast::listen(n, in_rx, out_tx).await;
+        let write = write(io::stdout().lock(), out_rx).await;
+        try_join!(read, listen, write);
+    });
 
-    Ok(())
+    let sync = tokio::spawn(async move {
+        // TODO: we need to wrap the store in a mutex since it will be accessed by multiple threads.
+        todo!("include sync() here");
+    });
+
+    try_join!(listen, sync);
 }

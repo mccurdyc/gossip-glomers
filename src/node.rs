@@ -1,9 +1,9 @@
-use crate::{config, io, node, payload, store};
-use anyhow::Result;
-use payload::Payload;
-use serde::{Deserialize, Serialize};
+use crate::payload::{Payload, RequestBody};
+use crate::{config, store};
+use serde::de::DeserializeOwned;
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, Cursor, Write};
+use std::io::BufRead;
+use tokio::sync::mpsc;
 use tracing::{error, info};
 
 #[derive(Debug)]
@@ -25,19 +25,6 @@ pub struct Node<'a, S: store::Store, T: config::TimeSource> {
     pub(crate) seen: HashSet<u32>,
     pub store: &'a mut S,
     pub config: config::Config<T>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "lowercase")]
-enum RequestBody {
-    Init {
-        msg_id: u32,
-        node_id: String,
-        node_ids: Vec<String>,
-    },
-    #[serde(other)]
-    Other,
 }
 
 impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
@@ -82,65 +69,33 @@ impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
             }
         }
     }
+}
 
-    pub fn run<R, W, F>(&mut self, reader: R, mut writer: W, f: F) -> Result<()>
-    where
-        R: BufRead,
-        W: Write,
-        F: Fn(&mut node::Node<'a, S, T>, Box<dyn BufRead>, &mut W) -> Result<()>,
-        S: store::Store,
-    {
-        info!("starting listener...");
+/// read reads lines from the reader. The reader in this case will be stdin which is not closed
+/// until maelstrom is done with analysis.
+pub(crate) async fn read<R, T>(
+    reader: R,
+    tx: mpsc::UnboundedSender<Payload<RequestBody<T>>>,
+) -> anyhow::Result<()>
+where
+    R: BufRead + Send,
+    T: DeserializeOwned + Send,
+{
+    info!("starting listener...");
 
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                info!(">> input: {:?}", l);
-
-                // This tries to deserialize into Payload<RequestBody> based on the "type" field
-                // defined in RequestBody.
-                let msg: Payload<RequestBody> = serde_json::from_str(&l)?;
-
-                // Match based on the type.
-                match msg.body {
-                    // TODO: im thinking this should be moved into the listener as this ends up
-                    // being helpful for tests.
-                    RequestBody::Init {
-                        msg_id,
-                        node_id,
-                        node_ids,
-                    } => {
-                        self.init(node_id, node_ids);
-
-                        io::to_writer(
-                            &mut writer,
-                            payload::Payload {
-                                src: msg.dest,
-                                dest: msg.src,
-                                body: payload::ResponseBody::<()> {
-                                    typ: "init_ok".to_string(),
-                                    in_reply_to: msg_id,
-                                    data: None,
-                                },
-                            },
-                        )?
-                    }
-
-                    RequestBody::Other => {
-                        let buf = Box::new(Cursor::new(l));
-                        match f(self, buf, &mut writer) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("error listening: {:?}", e);
-                            }
-                        };
-                    }
-                }
-            } else {
-                error!("error reading line: {:?}", line);
-            }
+    for line in reader.lines() {
+        if let Ok(l) = line {
+            info!(">> input: {:?}", l);
+            let msg: Payload<RequestBody<T>> = serde_json::from_str(&l)?;
+            if let Err(e) = tx.send(msg) {
+                error!("failed while gossiping message: {}", e);
+            };
+            todo!("respond appropriately with a maelstrom response");
+        } else {
+            error!("error reading line: {:?}", line);
         }
-        Ok(())
     }
+    Ok(())
 }
 
 #[cfg(test)]
