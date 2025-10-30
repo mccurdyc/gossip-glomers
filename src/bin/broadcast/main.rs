@@ -1,7 +1,11 @@
-use app::{broadcast, config, node, store};
+use app::broadcast::listen;
+use app::node::{read, write};
+use app::payload::{Payload, RequestBody, ResponseBody};
+use app::{config, node, store};
 use std::io;
 use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
+use tokio::try_join;
 use tracing::info;
 
 // The worker_threads option configures the number of worker threads, and defaults
@@ -34,16 +38,16 @@ async fn main() {
     //  with naturally synchronous resources (IO-bound and not CPU bound) and the thought was
     //  that we would end up fighting over IO resource locks anyway. Might be a future improvement
     //  to "fan out". We should look into the tokio::io and tokio::fs modules
-    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Payload<RequestBody<T>>>();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Payload<ResponseBody<T>>>();
+    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Payload<RequestBody<BroadcastMessage>>>();
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Payload<ResponseBody<BroadcastMessage>>>();
 
     let mut n: node::Node<store::FileStore, config::SystemTime> = node::Node::new(&mut s, cfg);
 
     let listen = tokio::spawn(async move {
-        let read = read(io::stdin().lock(), in_tx).await;
-        let listen = broadcast::listen(n, in_rx, out_tx).await;
-        let write = write(io::stdout().lock(), out_rx).await;
-        try_join!(read, listen, write);
+        let r = read(io::stdin().lock(), in_tx).await;
+        let l = listen(n, in_rx, out_tx).await;
+        let w = write(io::stdout().lock(), out_rx).await;
+        try_join!(r, l, w);
     });
 
     let sync = tokio::spawn(async move {

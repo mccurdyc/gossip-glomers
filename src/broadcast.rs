@@ -4,7 +4,7 @@ use anyhow::Context;
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_with::{TimestampSeconds, serde_as};
+use serde_with::{serde_as, TimestampSeconds};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Write};
 use std::time::{Duration, SystemTime};
@@ -32,7 +32,7 @@ use tracing::{error, info};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
-enum RequestBody {
+pub(crate) enum RequestBody {
     Init {
         msg_id: u32,
         node_id: String,
@@ -52,7 +52,7 @@ enum RequestBody {
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct BroadcastMessage {
+pub(crate) struct BroadcastMessage {
     msg_id: u32,
     src: String,
     message: u32,
@@ -72,13 +72,12 @@ struct MessageState {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ReadRespData {
+pub(crate) struct ReadRespData {
     messages: Vec<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-enum Body<T: Serialize + DeserializeOwned + Send> {
+#[derive(Serialize, Debug)]
+pub(crate) enum Body<T: Serialize + Send> {
     Response(ResponseBody<T>),
     ReadRespData(ResponseBody<ReadRespData>),
     BroadcastMessage(BroadcastMessage),
@@ -166,13 +165,13 @@ fn anthropomorphic_gossip<S, T, B>(
             tx.send(Payload {
                 src: node.id.clone(),
                 dest: k.to_owned(),
-                body: Body::BroadcastMessage(BroadcastMessage {
+                body: Some(Body::BroadcastMessage(BroadcastMessage {
                     src: node.id.clone(),
                     msg_id: msg.msg_id,
                     message: msg.message,
                     expiration: Some(expiration.clone()),
                     state: Some(message_state.clone()),
-                }),
+                })),
             });
         }
     }
@@ -192,11 +191,11 @@ fn anthropomorphic_gossip<S, T, B>(
     if let Err(e) = tx.send(Payload {
         src: node.id.clone(),
         dest: msg.src.clone(),
-        body: Body::Response(ResponseBody {
+        body: Some(Body::Response(ResponseBody {
             typ: "broadcast_ok".to_string(),
             in_reply_to: msg.msg_id,
             data: None,
-        }),
+        })),
     }) {
         error!("failed to broadcast message: {}", e);
     }
@@ -206,10 +205,11 @@ pub(crate) async fn listen<'a, S, T, B>(
     node: &mut node::Node<'a, S, T>,
     mut rx: mpsc::UnboundedReceiver<Payload<RequestBody>>,
     tx: mpsc::UnboundedSender<Payload<Body<B>>>,
-) where
+) -> anyhow::Result<()>
+where
     T: config::TimeSource,
     S: store::Store + std::fmt::Debug,
-    B: Serialize + DeserializeOwned + Send,
+    B: Serialize + Send,
 {
     loop {
         let msg = match rx.recv().await {
@@ -217,50 +217,50 @@ pub(crate) async fn listen<'a, S, T, B>(
             None => continue,
         };
         match msg.body {
-            RequestBody::Init {
+            Some(RequestBody::Init {
                 msg_id,
                 node_id,
                 node_ids,
-            } => {
+            }) => {
                 node.init(node_id, node_ids);
 
                 if let Err(e) = tx.clone().send(Payload {
                     src: msg.dest,
                     dest: msg.src,
-                    body: Body::Response(ResponseBody {
+                    body: Some(Body::Response(ResponseBody {
                         typ: "init_ok".to_string(),
                         in_reply_to: msg_id,
                         data: None,
-                    }),
+                    })),
                 }) {
                     error!("errored while responding: {}", e);
                 };
             }
 
-            RequestBody::Topology {
+            Some(RequestBody::Topology {
                 msg_id,
                 topology: _, // NOTE: we don't use the topology message because I'm trying to define my own random neighborhood generator in node.init().
-            } => {
+            }) => {
                 if let Err(e) = tx.clone().send(Payload {
                     src: msg.dest,
                     dest: msg.src,
-                    body: Body::Response(ResponseBody {
+                    body: Some(Body::Response(ResponseBody {
                         typ: "topology_ok".to_string(),
                         in_reply_to: msg_id,
                         data: None,
-                    }),
+                    })),
                 }) {
                     error!("error sending topology_ok: {}", e);
                 }
             }
 
-            RequestBody::Broadcast(BroadcastMessage {
+            Some(RequestBody::Broadcast(BroadcastMessage {
                 src: _src,
                 msg_id,
                 message,
                 expiration,
                 state,
-            }) => {
+            })) => {
                 anthropomorphic_gossip(
                     node,
                     tx.clone(),
@@ -286,7 +286,7 @@ pub(crate) async fn listen<'a, S, T, B>(
                 )
             }
 
-            RequestBody::Read { msg_id } => {
+            Some(RequestBody::Read { msg_id }) => {
                 // Make sure we reset the file offset
                 // TODO: this makes no sense for stores that are NOT file-based (maybe)
                 // TODO: this breaks the interface to the store. The store should not
@@ -307,16 +307,20 @@ pub(crate) async fn listen<'a, S, T, B>(
                 tx.clone().send(Payload {
                     src: msg.dest,
                     dest: msg.src,
-                    body: Body::ReadRespData(ResponseBody {
+                    body: Some(Body::ReadRespData(ResponseBody {
                         typ: "read_ok".to_string(),
                         in_reply_to: msg_id,
                         data: Some(ReadRespData { messages: seen }),
-                    }),
+                    })),
                 });
             }
 
-            RequestBody::Other => {
+            Some(RequestBody::Other) => {
                 info!("other: {:?}", msg);
+            }
+
+            _ => {
+                error!("unexpected null message");
             }
         }
     }

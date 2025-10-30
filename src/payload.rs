@@ -1,45 +1,74 @@
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::collections::HashMap;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-// Generic payload wrapper for all message types
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-#[serde(rename_all = "lowercase")]
-pub struct Payload<T>
-where
-    T: DeserializeOwned + Send,
-{
+#[derive(Debug, Clone)]
+pub struct Payload<T> {
     pub src: String,
     pub dest: String,
     pub body: T,
 }
 
-// Generic request body with common fields
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-pub struct RequestBody<T>
+// Implement Serialize only when T is Serialize
+impl<T> Serialize for Payload<T>
 where
-    T: DeserializeOwned + Send,
+    T: Serialize,
 {
-    #[serde(rename = "type")]
-    pub typ: String,
-    pub msg_id: u32,
-    #[serde(flatten)]
-    pub data: Option<T>,
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Payload", 3)?;
+        state.serialize_field("src", &self.src)?;
+        state.serialize_field("dest", &self.dest)?;
+        state.serialize_field("body", &self.body)?;
+        state.end()
+    }
 }
 
-// Generic response body with common fields
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-pub struct ResponseBody<T>
+// Implement Deserialize only when T is DeserializeOwned
+impl<'de, T> Deserialize<'de> for Payload<T>
 where
-    T: Serialize + DeserializeOwned + Send,
+    T: DeserializeOwned,
 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PayloadHelper<T> {
+            src: String,
+            dest: String,
+            body: T,
+        }
+
+        let helper = PayloadHelper::<T>::deserialize(deserializer)?;
+        Ok(Payload {
+            src: helper.src,
+            dest: helper.dest,
+            body: helper.body,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "type")]
+pub struct RequestBody<T> {
+    pub msg_id: u32,
+    #[serde(flatten)]
+    pub data: T,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "type")]
+pub struct ResponseBody<T> {
     #[serde(rename = "type")]
     pub typ: String,
     pub in_reply_to: u32,
     #[serde(flatten)]
-    pub data: Option<T>,
+    pub data: T,
 }
 
-pub type UnhandledMessage = HashMap<String, serde_json::Value>;
+pub type UnhandledMessage = std::collections::HashMap<String, serde_json::Value>;
