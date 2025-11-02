@@ -1,7 +1,6 @@
-use app::broadcast::listen;
-use app::node::{read, write};
+use app::broadcast::BroadcastMessage;
 use app::payload::{Payload, RequestBody, ResponseBody};
-use app::{config, node, store};
+use app::{broadcast, config, node, store};
 use std::io;
 use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
@@ -44,9 +43,9 @@ async fn main() {
     let mut n: node::Node<store::FileStore, config::SystemTime> = node::Node::new(&mut s, cfg);
 
     let listen = tokio::spawn(async move {
-        let r = read(io::stdin().lock(), in_tx).await;
-        let l = listen(n, in_rx, out_tx).await;
-        let w = write(io::stdout().lock(), out_rx).await;
+        let r = node::read(io::stdin().lock(), in_tx).await;
+        let l = broadcast::listen(n, in_rx, out_tx).await;
+        let w = node::write(io::stdout().lock(), out_rx).await;
         try_join!(r, l, w);
     });
 

@@ -1,10 +1,8 @@
 use crate::payload::{Payload, ResponseBody};
 use crate::{config, node, store};
-use anyhow::Context;
 use rand::Rng;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, TimestampSeconds};
+use serde_with::{TimestampSeconds, serde_as};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Write};
 use std::time::{Duration, SystemTime};
@@ -32,7 +30,7 @@ use tracing::{error, info};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum RequestBody {
+pub enum RequestBody {
     Init {
         msg_id: u32,
         node_id: String,
@@ -52,7 +50,7 @@ pub(crate) enum RequestBody {
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct BroadcastMessage {
+pub struct BroadcastMessage {
     msg_id: u32,
     src: String,
     message: u32,
@@ -72,12 +70,12 @@ struct MessageState {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct ReadRespData {
+pub struct ReadRespData {
     messages: Vec<u32>,
 }
 
 #[derive(Serialize, Debug)]
-pub(crate) enum Body<T: Serialize + Send> {
+pub enum Body<T: Serialize + Send> {
     Response(ResponseBody<T>),
     ReadRespData(ResponseBody<ReadRespData>),
     BroadcastMessage(BroadcastMessage),
@@ -129,16 +127,15 @@ pub(crate) enum Body<T: Serialize + Send> {
 //     }
 // }
 
+#[allow(dead_code)]
 fn anthropomorphic_gossip<S, T, B>(
     node: &mut node::Node<S, T>,
-    // TODO: this Payload should be generic because it could be a response or a broadcast
-    // "forward" message.
     tx: mpsc::UnboundedSender<Payload<Body<B>>>,
     msg: BroadcastMessage,
 ) where
     S: store::Store + std::fmt::Debug,
     T: config::TimeSource,
-    B: Serialize + DeserializeOwned + Send,
+    B: Serialize + Send,
 {
     // 1/ messages need to have a relevancy TTL or expiration
     let expiration = msg
@@ -162,17 +159,19 @@ fn anthropomorphic_gossip<S, T, B>(
                 continue;
             }
 
-            tx.send(Payload {
+            if let Err(e) = tx.send(Payload {
                 src: node.id.clone(),
                 dest: k.to_owned(),
-                body: Some(Body::BroadcastMessage(BroadcastMessage {
+                body: Body::BroadcastMessage(BroadcastMessage {
                     src: node.id.clone(),
                     msg_id: msg.msg_id,
                     message: msg.message,
                     expiration: Some(expiration.clone()),
                     state: Some(message_state.clone()),
-                })),
-            });
+                }),
+            }) {
+                error!("failed to broadcast message: {}", e);
+            };
         }
     }
 
@@ -191,17 +190,17 @@ fn anthropomorphic_gossip<S, T, B>(
     if let Err(e) = tx.send(Payload {
         src: node.id.clone(),
         dest: msg.src.clone(),
-        body: Some(Body::Response(ResponseBody {
+        body: Body::Response(ResponseBody {
             typ: "broadcast_ok".to_string(),
             in_reply_to: msg.msg_id,
             data: None,
-        })),
+        }),
     }) {
         error!("failed to broadcast message: {}", e);
     }
 }
 
-pub(crate) async fn listen<'a, S, T, B>(
+pub async fn listen<'a, S, T, B>(
     node: &mut node::Node<'a, S, T>,
     mut rx: mpsc::UnboundedReceiver<Payload<RequestBody>>,
     tx: mpsc::UnboundedSender<Payload<Body<B>>>,
@@ -217,50 +216,50 @@ where
             None => continue,
         };
         match msg.body {
-            Some(RequestBody::Init {
+            RequestBody::Init {
                 msg_id,
                 node_id,
                 node_ids,
-            }) => {
+            } => {
                 node.init(node_id, node_ids);
 
                 if let Err(e) = tx.clone().send(Payload {
                     src: msg.dest,
                     dest: msg.src,
-                    body: Some(Body::Response(ResponseBody {
+                    body: Body::Response(ResponseBody {
                         typ: "init_ok".to_string(),
                         in_reply_to: msg_id,
                         data: None,
-                    })),
+                    }),
                 }) {
                     error!("errored while responding: {}", e);
                 };
             }
 
-            Some(RequestBody::Topology {
+            RequestBody::Topology {
                 msg_id,
                 topology: _, // NOTE: we don't use the topology message because I'm trying to define my own random neighborhood generator in node.init().
-            }) => {
+            } => {
                 if let Err(e) = tx.clone().send(Payload {
                     src: msg.dest,
                     dest: msg.src,
-                    body: Some(Body::Response(ResponseBody {
+                    body: Body::Response(ResponseBody {
                         typ: "topology_ok".to_string(),
                         in_reply_to: msg_id,
                         data: None,
-                    })),
+                    }),
                 }) {
                     error!("error sending topology_ok: {}", e);
                 }
             }
 
-            Some(RequestBody::Broadcast(BroadcastMessage {
+            RequestBody::Broadcast(BroadcastMessage {
                 src: _src,
                 msg_id,
                 message,
                 expiration,
                 state,
-            })) => {
+            }) => {
                 anthropomorphic_gossip(
                     node,
                     tx.clone(),
@@ -286,12 +285,14 @@ where
                 )
             }
 
-            Some(RequestBody::Read { msg_id }) => {
+            RequestBody::Read { msg_id } => {
                 // Make sure we reset the file offset
                 // TODO: this makes no sense for stores that are NOT file-based (maybe)
                 // TODO: this breaks the interface to the store. The store should not
                 // expose implementation details to consumers like this.
-                node.store.rewind().context("failed to rewind store");
+                if let Err(e) = node.store.rewind() {
+                    error!("failed to rewind store cursor: {}", e);
+                };
 
                 // Move this to the write; writes should do the heavy lifting, reads should be fast
                 let mut seen = Vec::<u32>::new();
@@ -304,23 +305,21 @@ where
                     seen.push(v);
                 }
 
-                tx.clone().send(Payload {
+                if let Err(e) = tx.clone().send(Payload {
                     src: msg.dest,
                     dest: msg.src,
-                    body: Some(Body::ReadRespData(ResponseBody {
+                    body: Body::ReadRespData(ResponseBody {
                         typ: "read_ok".to_string(),
                         in_reply_to: msg_id,
                         data: Some(ReadRespData { messages: seen }),
-                    })),
-                });
+                    }),
+                }) {
+                    error!("failed to put message on the queue: {}", e);
+                };
             }
 
-            Some(RequestBody::Other) => {
+            RequestBody::Other => {
                 info!("other: {:?}", msg);
-            }
-
-            _ => {
-                error!("unexpected null message");
             }
         }
     }

@@ -1,7 +1,7 @@
 use crate::payload::{Payload, RequestBody, ResponseBody};
 use crate::{config, store};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Write};
 use tokio::sync::mpsc;
@@ -23,6 +23,7 @@ pub struct Node<'a, S: store::Store, T: config::TimeSource> {
     // old messages at this point, so we don't really care about those old messages. If we see an
     // old message again, I think it's safe to assume our neighborhood hasn't seen it until we
     // rebuild the "seen_by" state.
+    #[allow(dead_code)]
     pub(crate) seen: HashSet<u32>,
     pub store: &'a mut S,
     pub config: config::Config<T>,
@@ -74,7 +75,7 @@ impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
 
 /// read reads lines from the reader. The reader in this case will be stdin which is not closed
 /// until maelstrom is done with analysis.
-pub(crate) async fn read<R, T>(
+pub async fn read<R, T>(
     reader: R,
     tx: mpsc::UnboundedSender<Payload<RequestBody<T>>>,
 ) -> anyhow::Result<()>
@@ -99,7 +100,7 @@ where
     Ok(())
 }
 
-pub(crate) async fn write<W, T>(
+pub async fn write<W, T>(
     _writer: W,
     _rx: mpsc::UnboundedReceiver<Payload<ResponseBody<T>>>,
 ) -> anyhow::Result<()>

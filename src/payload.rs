@@ -68,7 +68,7 @@ pub struct ResponseBody<T> {
     pub typ: String,
     pub in_reply_to: u32,
     #[serde(flatten)]
-    pub data: T,
+    pub data: Option<T>,
 }
 
 pub type UnhandledMessage = std::collections::HashMap<String, serde_json::Value>;
