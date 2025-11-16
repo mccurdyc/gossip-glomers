@@ -1,4 +1,4 @@
-use crate::payload::{Payload, RequestBody, ResponseBody};
+use crate::payload::{Payload, ResponseBody};
 use crate::{config, store};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -73,14 +73,13 @@ impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
     }
 }
 
-/// read reads lines from the reader. The reader in this case will be stdin which is not closed
-/// until maelstrom is done with analysis.
-pub async fn read<R, T>(
-    reader: R,
-    tx: mpsc::UnboundedSender<Payload<RequestBody<T>>>,
-) -> anyhow::Result<()>
+/// read reads lines from the reader and puts those lines on the tx channel.
+///
+/// The reader will generally be stdin per the spec of maelstrom and is not closed until the
+/// maelstrom test is finished and stdin is closed.
+pub async fn read<R, T>(reader: R, tx: mpsc::UnboundedSender<Payload<T>>) -> anyhow::Result<()>
 where
-    R: BufRead + Send,
+    R: BufRead,
     T: DeserializeOwned + Send,
 {
     info!("starting listener...");
@@ -88,11 +87,10 @@ where
     for line in reader.lines() {
         if let Ok(l) = line {
             info!(">> input: {:?}", l);
-            let msg: Payload<RequestBody<T>> = serde_json::from_str(&l)?;
+            let msg: Payload<T> = serde_json::from_str(&l)?;
             if let Err(e) = tx.send(msg) {
                 error!("failed while gossiping message: {}", e);
             };
-            todo!("respond appropriately with a maelstrom response");
         } else {
             error!("error reading line: {:?}", line);
         }
@@ -100,15 +98,22 @@ where
     Ok(())
 }
 
+/// write receives messages from the rx channel, serializes them to JSON and writes them to the
+/// writer --- which is stdout per the maelstrom spec.
 pub async fn write<W, T>(
-    _writer: W,
-    _rx: mpsc::UnboundedReceiver<Payload<ResponseBody<T>>>,
+    mut w: W,
+    mut rx: mpsc::UnboundedReceiver<Payload<ResponseBody<T>>>,
 ) -> anyhow::Result<()>
 where
-    W: Write,
+    W: Write + Clone,
     T: Serialize + Send,
 {
-    todo!("implement node write");
+    while let Some(m) = rx.recv().await {
+        let mut o = serde_json::to_vec(&m)?;
+        o.push(b'\n');
+        w.write_all(&o)?;
+    }
+    Ok(())
 }
 
 // #[cfg(test)]

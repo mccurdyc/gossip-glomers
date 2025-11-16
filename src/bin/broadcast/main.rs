@@ -1,5 +1,5 @@
-use app::broadcast::BroadcastMessage;
-use app::payload::{Payload, RequestBody, ResponseBody};
+use app::broadcast::{Body, RequestBody};
+use app::payload::{Payload, ResponseBody};
 use app::{broadcast, config, node, store};
 use std::io;
 use tempfile::NamedTempFile;
@@ -37,14 +37,14 @@ async fn main() {
     //  with naturally synchronous resources (IO-bound and not CPU bound) and the thought was
     //  that we would end up fighting over IO resource locks anyway. Might be a future improvement
     //  to "fan out". We should look into the tokio::io and tokio::fs modules
-    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Payload<RequestBody<BroadcastMessage>>>();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Payload<ResponseBody<BroadcastMessage>>>();
+    let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Payload>();
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Payload>();
 
     let mut n: node::Node<store::FileStore, config::SystemTime> = node::Node::new(&mut s, cfg);
 
     let listen = tokio::spawn(async move {
         let r = node::read(io::stdin().lock(), in_tx).await;
-        let l = broadcast::listen(n, in_rx, out_tx).await;
+        let l = broadcast::listen(&mut n, in_rx, out_tx).await;
         let w = node::write(io::stdout().lock(), out_rx).await;
         try_join!(r, l, w);
     });

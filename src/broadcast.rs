@@ -1,3 +1,4 @@
+use crate::payload;
 use crate::payload::{Payload, ResponseBody};
 use crate::{config, node, store};
 use rand::Rng;
@@ -70,15 +71,31 @@ struct MessageState {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct ReadRespData {
     messages: Vec<u32>,
 }
 
+// Goal: have a generic type Payload for input and output
 #[derive(Serialize, Debug)]
-pub enum Body<T: Serialize + Send> {
-    Response(ResponseBody<T>),
+pub enum Body {
+    Response(ResponseBody<()>), // use for T: None
     ReadRespData(ResponseBody<ReadRespData>),
-    BroadcastMessage(BroadcastMessage),
+}
+
+impl Into<payload::RequestBody<BroadcastMessage>> for BroadcastMessage {
+    fn into(self) -> payload::RequestBody<BroadcastMessage> {
+        payload::RequestBody {
+            msg_id: self.msg_id,
+            data: BroadcastMessage {
+                msg_id: self.msg_id,
+                src: self.src,
+                message: self.message,
+                expiration: self.expiration,
+                state: self.state,
+            },
+        }
+    }
 }
 
 // #[expect(dead_code)]
@@ -128,14 +145,13 @@ pub enum Body<T: Serialize + Send> {
 // }
 
 #[allow(dead_code)]
-fn anthropomorphic_gossip<S, T, B>(
+fn anthropomorphic_gossip<S, T>(
     node: &mut node::Node<S, T>,
-    tx: mpsc::UnboundedSender<Payload<Body<B>>>,
+    tx: mpsc::UnboundedSender<Payload<Body>>,
     msg: BroadcastMessage,
 ) where
     S: store::Store + std::fmt::Debug,
     T: config::TimeSource,
-    B: Serialize + Send,
 {
     // 1/ messages need to have a relevancy TTL or expiration
     let expiration = msg
@@ -162,7 +178,7 @@ fn anthropomorphic_gossip<S, T, B>(
             if let Err(e) = tx.send(Payload {
                 src: node.id.clone(),
                 dest: k.to_owned(),
-                body: Body::BroadcastMessage(BroadcastMessage {
+                body: BroadcastMessage(BroadcastMessage {
                     src: node.id.clone(),
                     msg_id: msg.msg_id,
                     message: msg.message,
@@ -203,7 +219,7 @@ fn anthropomorphic_gossip<S, T, B>(
 pub async fn listen<'a, S, T, B>(
     node: &mut node::Node<'a, S, T>,
     mut rx: mpsc::UnboundedReceiver<Payload<RequestBody>>,
-    tx: mpsc::UnboundedSender<Payload<Body<B>>>,
+    tx: mpsc::UnboundedSender<Payload<Body>>,
 ) -> anyhow::Result<()>
 where
     T: config::TimeSource,
