@@ -1,6 +1,5 @@
 // Core modules used by all binaries
 pub mod config;
-pub mod io;
 pub mod node;
 pub mod payload;
 pub mod store;

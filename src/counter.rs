@@ -1,5 +1,5 @@
 use crate::payload::{Payload, ResponseBody};
-use crate::{config, io, node, store};
+use crate::{config, node, store};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, SeekFrom, Write};
@@ -143,12 +143,12 @@ mod tests {
         ];
 
         let buf: Vec<u8> = Vec::new();
-        let mut s = store::MemoryStore::new(buf).expect("failed to create store");
+        let s = store::MemoryStore::new(buf).expect("failed to create store");
         let cfg = config::Config::<config::MockTime>::new(config::MockTime {
             now: time::UNIX_EPOCH + time::Duration::from_secs(1757680326),
         })
         .expect("failed to get config");
-        let mut n: node::Node<store::MemoryStore, config::MockTime> = node::Node::new(&mut s, cfg);
+        let mut n: node::Node<store::MemoryStore, config::MockTime> = node::Node::new(s, cfg);
 
         for (input, expected) in test_cases {
             // Necessary to implement Read trait on BufReader for bytes

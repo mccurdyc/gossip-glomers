@@ -1,12 +1,12 @@
 use fs2::FileExt;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::PathBuf;
 
 // std::io::{Read,Write} Supertrait
 pub trait Store: Write + Read + BufRead + Seek {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryStore {
     buf: Vec<u8>,
     position: usize,
@@ -79,7 +79,7 @@ impl Seek for MemoryStore {
 }
 
 #[derive(Debug)]
-pub struct FileStore<'a> {
+pub struct FileStore {
     // File does not buffer reads and writes. For efficiency, consider wrapping the file in a BufReader or BufWriter
     // when performing many small read or write calls, unless unbuffered reads and writes are required.
     pub file: File,
@@ -89,40 +89,31 @@ pub struct FileStore<'a> {
     // A BufReader<R> performs large, infrequent reads on the underlying Read and maintains an in-memory buffer of the
     // results.
     inner: BufReader<File>, // Not Copy-safe.
-    path: &'a Path,
 }
 
-impl<'a> Store for FileStore<'a> {}
-impl<'a> FileStore<'a> {
-    pub fn new(path: &'a Path) -> Result<Self, std::io::Error> {
+impl Store for FileStore {}
+impl FileStore {
+    pub fn new(path: PathBuf) -> Result<Self, std::io::Error> {
         // We have two separate file descriptors: one for writing
         // and one for reading. Primarily to avoid having to reset seek, etc.
         let w = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(path)?;
+            .open(path.as_path())?;
 
-        let r = std::fs::OpenOptions::new().read(true).open(path)?;
+        let r = std::fs::OpenOptions::new()
+            .read(true)
+            .open(path.as_path())?;
 
         let inner = BufReader::new(r);
-        Ok(FileStore {
-            file: w,
-            inner,
-            path,
-        })
-    }
-
-    pub fn path(&self) -> &'a Path {
-        self.path
+        Ok(FileStore { file: w, inner })
     }
 }
 
-impl Write for FileStore<'_> {
+impl Write for FileStore {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        self.file.lock_exclusive()?;
+        self.file.lock()?;
         let s = self.file.write(buf)?;
-        fs2::FileExt::unlock(&self.file)?;
-
         Ok(s)
     }
 
@@ -130,7 +121,6 @@ impl Write for FileStore<'_> {
         self.file.lock_exclusive()?;
         self.file.write_all(buf)?;
         fs2::FileExt::unlock(&self.file)?;
-
         Ok(())
     }
 
@@ -142,18 +132,17 @@ impl Write for FileStore<'_> {
     }
 }
 
-impl Read for FileStore<'_> {
+impl Read for FileStore {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.file.lock_exclusive()?;
         let u = self.inner.read(buf);
         fs2::FileExt::unlock(&self.file)?;
-
         u
     }
 }
 
 // Inspiration - https://doc.rust-lang.org/src/std/io/stdio.rs.html#546
-impl BufRead for FileStore<'_> {
+impl BufRead for FileStore {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.inner.fill_buf()
     }
@@ -171,7 +160,7 @@ impl BufRead for FileStore<'_> {
     }
 }
 
-impl Seek for FileStore<'_> {
+impl Seek for FileStore {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         // seeks the file cursor for writing
         self.file.seek(pos)?;

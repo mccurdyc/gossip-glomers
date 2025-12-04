@@ -1,9 +1,11 @@
-use crate::payload::{Payload, ResponseBody};
+use crate::payload::Payload;
 use crate::{config, store};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, Write};
+use std::sync::Arc;
+use std::sync::Mutex;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
@@ -12,7 +14,7 @@ pub struct Metadata {
     pub priority: u8,
 }
 
-pub struct Node<'a, S: store::Store, T: config::TimeSource> {
+pub struct Node<S: store::Store, T: config::TimeSource> {
     pub id: String, // include it as the src of any message it sends.
     pub msg_id: u32,
     pub world: HashMap<String, Metadata>,
@@ -25,22 +27,21 @@ pub struct Node<'a, S: store::Store, T: config::TimeSource> {
     // rebuild the "seen_by" state.
     #[allow(dead_code)]
     pub(crate) seen: HashSet<u32>,
-    pub store: &'a mut S,
+    // TODO: this needs to be safe to share between threads.
+    // And it needs(?) to be a type that can be owned for calling `.lines()` on it.
+    pub store: Arc<Mutex<S>>,
     pub config: config::Config<T>,
 }
 
-impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
-    pub fn new(s: &'a mut S, config: config::Config<T>) -> Self
-    where
-        S: store::Store,
-    {
+impl<S: store::Store, T: config::TimeSource> Node<S, T> {
+    pub fn new(s: S, config: config::Config<T>) -> Self {
         Self {
             id: std::default::Default::default(),
             msg_id: std::default::Default::default(),
             world: std::default::Default::default(),
             neighborhood: std::default::Default::default(),
             seen: std::default::Default::default(),
-            store: s,
+            store: Arc::new(Mutex::new(s)),
             config,
         }
     }
@@ -77,23 +78,30 @@ impl<'a, S: store::Store, T: config::TimeSource> Node<'a, S, T> {
 ///
 /// The reader will generally be stdin per the spec of maelstrom and is not closed until the
 /// maelstrom test is finished and stdin is closed.
-pub async fn read<R, T>(reader: R, tx: mpsc::UnboundedSender<Payload<T>>) -> anyhow::Result<()>
+pub async fn read<R, T>(src: R, tx: mpsc::UnboundedSender<Payload<T>>) -> std::io::Result<()>
 where
-    R: BufRead,
+    // Why `Unpin`?
+    // it's because im creating a Future inside of a Future
+    //
+    // 1 Outer future: Your async fn read() - this becomes a self-referential state machine
+    // 2 Inner future: src.read_to_end(&mut buf) - this borrows from the outer future's state
+    // The outer future owns src and buf, and the inner future borrows them. That creates the self-reference.
+    R: AsyncBufReadExt + Unpin,
     T: DeserializeOwned + Send,
 {
     info!("starting listener...");
+    let mut lines = src.lines();
 
-    for line in reader.lines() {
-        if let Ok(l) = line {
-            info!(">> input: {:?}", l);
-            let msg: Payload<T> = serde_json::from_str(&l)?;
-            if let Err(e) = tx.send(msg) {
-                error!("failed while gossiping message: {}", e);
-            };
-        } else {
-            error!("error reading line: {:?}", line);
-        }
+    while let Some(line) = lines.next_line().await? {
+        info!(">> input: {:?}", line);
+        match serde_json::from_str::<Payload<T>>(&line) {
+            Ok(msg) => {
+                if let Err(e) = tx.send(msg) {
+                    error!("failed while gossiping message: {}", e);
+                }
+            }
+            Err(e) => error!("failed to deserialize payload: {}", e),
+        };
     }
     Ok(())
 }
@@ -102,16 +110,16 @@ where
 /// writer --- which is stdout per the maelstrom spec.
 pub async fn write<W, T>(
     mut w: W,
-    mut rx: mpsc::UnboundedReceiver<Payload<ResponseBody<T>>>,
-) -> anyhow::Result<()>
+    mut rx: mpsc::UnboundedReceiver<Payload<T>>,
+) -> std::io::Result<()>
 where
-    W: Write + Clone,
+    W: AsyncWriteExt + Unpin,
     T: Serialize + Send,
 {
     while let Some(m) = rx.recv().await {
         let mut o = serde_json::to_vec(&m)?;
         o.push(b'\n');
-        w.write_all(&o)?;
+        w.write_all(&o).await?;
     }
     Ok(())
 }

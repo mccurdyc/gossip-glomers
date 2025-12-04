@@ -5,7 +5,6 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_with::{TimestampSeconds, serde_as};
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, Write};
 use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -77,10 +76,11 @@ pub struct ReadRespData {
 }
 
 // Goal: have a generic type Payload for input and output
-#[derive(Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum Body {
     Response(ResponseBody<()>), // use for T: None
     ReadRespData(ResponseBody<ReadRespData>),
+    BroadcastMessage(BroadcastMessage),
 }
 
 impl Into<payload::RequestBody<BroadcastMessage>> for BroadcastMessage {
@@ -178,7 +178,7 @@ fn anthropomorphic_gossip<S, T>(
             if let Err(e) = tx.send(Payload {
                 src: node.id.clone(),
                 dest: k.to_owned(),
-                body: BroadcastMessage(BroadcastMessage {
+                body: Body::BroadcastMessage(BroadcastMessage {
                     src: node.id.clone(),
                     msg_id: msg.msg_id,
                     message: msg.message,
@@ -195,10 +195,14 @@ fn anthropomorphic_gossip<S, T>(
 
     // 5/ Persist unique values to the store.
     if node.seen.insert(msg.msg_id) {
-        if let Err(e) = serde_json::ser::to_writer(&mut node.store, &msg.msg_id) {
+        let mut s = node
+            .store
+            .lock()
+            .expect("failed to take store lock for writing");
+        if let Err(e) = serde_json::ser::to_writer(&mut *s, &msg.msg_id) {
             error!("failed to serialized message to be stored: {}", e);
         };
-        if let Err(e) = writeln!(&mut node.store) {
+        if let Err(e) = writeln!(&mut *s) {
             error!("failed to persist message to the store: {}", e);
         }
     }
@@ -216,21 +220,20 @@ fn anthropomorphic_gossip<S, T>(
     }
 }
 
-pub async fn listen<'a, S, T, B>(
-    node: &mut node::Node<'a, S, T>,
+pub async fn listen<'a, S, T>(
+    node: &'a mut node::Node<S, T>,
     mut rx: mpsc::UnboundedReceiver<Payload<RequestBody>>,
     tx: mpsc::UnboundedSender<Payload<Body>>,
-) -> anyhow::Result<()>
-where
+) where
     T: config::TimeSource,
     S: store::Store + std::fmt::Debug,
-    B: Serialize + Send,
 {
     loop {
         let msg = match rx.recv().await {
             Some(msg) => msg,
             None => continue,
         };
+
         match msg.body {
             RequestBody::Init {
                 msg_id,
@@ -302,22 +305,19 @@ where
             }
 
             RequestBody::Read { msg_id } => {
-                // Make sure we reset the file offset
-                // TODO: this makes no sense for stores that are NOT file-based (maybe)
-                // TODO: this breaks the interface to the store. The store should not
-                // expose implementation details to consumers like this.
-                if let Err(e) = node.store.rewind() {
-                    error!("failed to rewind store cursor: {}", e);
-                };
+                let mut buf = String::new();
+                if let Err(e) = node
+                    .store
+                    .lock()
+                    .expect("expected to acquire store lock for reading")
+                    .read_to_string(&mut buf)
+                {
+                    error!("failed to read store: {e}");
+                }
 
-                // Move this to the write; writes should do the heavy lifting, reads should be fast
                 let mut seen = Vec::<u32>::new();
-                let lines = node.store.lines();
-                for line in lines {
-                    let v: u32 = line
-                        .expect("failed to extract line")
-                        .parse()
-                        .expect("failed to parse read line");
+                for line in buf.lines() {
+                    let v: u32 = line.parse().expect("failed to parse read line");
                     seen.push(v);
                 }
 

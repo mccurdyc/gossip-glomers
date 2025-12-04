@@ -60,7 +60,7 @@ pub struct RequestBody<T> {
     pub data: T,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub struct ResponseBody<T> {
